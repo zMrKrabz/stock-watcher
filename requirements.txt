@@ -1,0 +1,5 @@
+pandas
+discordpy
+aiohttp
+cchardet
+aiodns
