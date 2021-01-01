@@ -3,6 +3,7 @@ import asyncio
 import urllib
 import time
 import os
+from datetime import datetime, timedelta
 from discord import Webhook, AsyncWebhookAdapter
 
 apiKey = os.environ["API_KEY"]
@@ -20,24 +21,52 @@ async def getPriceOfTicker(symbol, apiKey, s):
     return data["c"]
 
 
+def calculateTimePeriod(interval, time_period):
+    fromTime = (datetime.now()).timestamp()
+
+    if interval == "1":
+        fromTime -= timedelta(minutes=1).total_seconds() * (time_period + 100)
+    elif interval == "5":
+        fromTime -= timedelta(minutes=5).total_seconds() * (time_period + 100)
+    elif interval == "15":
+        fromTime -= timedelta(minutes=15).total_seconds() * (time_period + 100)
+    elif interval == "60":
+        fromTime -= timedelta(minutes=60).total_seconds() * (time_period + 100)
+    elif interval == "D":
+        fromTime -= timedelta(days=1).total_seconds() * ((time_period / 5) * 7 + 9)
+    elif interval == "W":
+        fromTime -= timedelta(weeks=1).total_seconds() * (time_period + 100)
+    elif interval == "M":
+        fromTime -= timedelta(weeks=4).total_seconds() * (time_period + 100)
+
+    toTime = time.time()
+    return {"fromTime": int(fromTime), "toTime": int(toTime)}
+
+
 async def alertEMA(symbol, interval, time_period, apiKey, s):
+    periods = calculateTimePeriod(interval, time_period)
     headers = {"X-Finnhub-Token": apiKey}
     params = {
         "symbol": symbol,
         "resolution": interval,
         "indicator": "EMA",
         "timeperiod": time_period,
-        "from": 1583098857,
-        "to": int(time.time()),
+        "from": periods["fromTime"],
+        "to": periods["toTime"],
+        "seriestype": "c",
     }
     paramsString = urllib.parse.urlencode(params)
     resp = await s.get(
         "https://finnhub.io/api/v1/indicator?" + paramsString, headers=headers
     )
     data = await resp.json()
-    currentPrice = data["c"][-1]
-    emaLevel = data["ema"][-1]
-    return evalEMA(currentPrice, emaLevel)
+
+    if data["s"] == "ok":
+        currentPrice = data["c"][-1]
+        emaLevel = data["ema"][-1]
+        return evalEMA(currentPrice, emaLevel)
+    else:
+        print(data)
 
 
 def evalPriceSignal(price, signal, signalPrice):
@@ -87,7 +116,7 @@ async def handleEmaTicket(t, s):
     emaAlert = await alertEMA(t["symbol"], "D", 10, apiKey, s)
     if emaAlert:
         message = (
-            f"{t['symbol']} hit EMA level on the {intervalTranslator[t['interval']]}"
+            f"{t['symbol']} hit EMA level on the {intervalTranslator[t['interval']]}.\n"
         )
         await sendWebhook(message)
         return True
@@ -109,3 +138,9 @@ async def pollTickers(tickets):
                 notAlertedTickets.append(t)
 
         return notAlertedTickets
+
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(pollTickers([]))
+    # print(calculateTimePeriod("D", 100))
