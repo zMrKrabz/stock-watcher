@@ -5,68 +5,24 @@ import time
 import os
 from datetime import datetime, timedelta
 from discord import Webhook, AsyncWebhookAdapter
+from talib import EMA
+import numpy as np
 
-apiKey = os.environ["API_KEY"]
+apiKey = os.environ["APCA_API_KEY_ID"]
 webhookURL = os.environ["WEBHOOK_URL"]
 
-
+"""
+Functions related to simply alerting price of a ticker
+"""
+# Returns latest ask and bid of a stock
 async def getPriceOfTicker(symbol, apiKey, s):
-    headers = {"X-Finnhub-Token": apiKey}
-    params = {"symbol": symbol}
-    paramsString = urllib.parse.urlencode(params)
+    params = {"apiKey": apiKey}
+    paramString = urllib.parse.urlencode(params)
     resp = await s.get(
-        "https://finnhub.io/api/v1/quote?" + paramsString, headers=headers
+        f"https://api.polygon.io/v1/last_quote/stocks/{symbol}?" + paramString
     )
     data = await resp.json()
-    return data["c"]
-
-
-def calculateTimePeriod(interval, time_period):
-    fromTime = (datetime.now()).timestamp()
-
-    if interval == "1":
-        fromTime -= timedelta(minutes=1).total_seconds() * (time_period + 100)
-    elif interval == "5":
-        fromTime -= timedelta(minutes=5).total_seconds() * (time_period + 100)
-    elif interval == "15":
-        fromTime -= timedelta(minutes=15).total_seconds() * (time_period + 100)
-    elif interval == "60":
-        fromTime -= timedelta(minutes=60).total_seconds() * (time_period + 100)
-    elif interval == "D":
-        fromTime -= timedelta(days=1).total_seconds() * ((time_period / 5) * 7 + 9)
-    elif interval == "W":
-        fromTime -= timedelta(weeks=1).total_seconds() * (time_period + 100)
-    elif interval == "M":
-        fromTime -= timedelta(weeks=4).total_seconds() * (time_period + 100)
-
-    toTime = time.time()
-    return {"fromTime": int(fromTime), "toTime": int(toTime)}
-
-
-async def alertEMA(symbol, interval, time_period, apiKey, s):
-    periods = calculateTimePeriod(interval, time_period)
-    headers = {"X-Finnhub-Token": apiKey}
-    params = {
-        "symbol": symbol,
-        "resolution": interval,
-        "indicator": "EMA",
-        "timeperiod": time_period,
-        "from": periods["fromTime"],
-        "to": periods["toTime"],
-        "seriestype": "c",
-    }
-    paramsString = urllib.parse.urlencode(params)
-    resp = await s.get(
-        "https://finnhub.io/api/v1/indicator?" + paramsString, headers=headers
-    )
-    data = await resp.json()
-
-    if data["s"] == "ok":
-        currentPrice = data["c"][-1]
-        emaLevel = data["ema"][-1]
-        return evalEMA(currentPrice, emaLevel)
-    else:
-        print(data)
+    return {"ask": data["last"]["askprice"], "bid": data["last"]["bidprice"]}
 
 
 def evalPriceSignal(price, signal, signalPrice):
@@ -76,10 +32,43 @@ def evalPriceSignal(price, signal, signalPrice):
         return (price == signalPrice) or (price < signalPrice)
 
 
+# Get all candles over a certain interval
+# Returns array of last close price
+async def getCandles(s, symbol, multiplier, timespan, limit):
+    params = {"apiKey": apiKey, "sort": "desc", "limit": limit, "unadjusted": "true"}
+    paramString = urllib.parse.urlencode(params)
+    start = "2000-10-14"
+    end = datetime.now().strftime("%Y-%m-%d")
+    resp = await s.get(
+        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start}/{end}?"
+        + paramString
+    )
+    data = await resp.json()
+    data["results"].reverse()
+    candles = [float(d["c"]) for d in data["results"]]
+    return np.asarray(candles, dtype=np.float)
+
+
+"""
+Code to handle EMA related functions
+"""
+
+# timespan - minute | hour | day | week | month | quarter | year
+# timeperiod - How many candles to use
+# returns boolean if ema should be alerted
+async def alertEMA(s, symbol, timespan, timeperiod):
+    candles = await getCandles(s, symbol, 1, timespan, timeperiod)
+    data = EMA(candles, timeperiod=timeperiod)
+    ema = data[-1]
+    return evalEMA(candles[-1], ema)
+
+
+# Evaluates and sees if ema is within 2% of target price level
 def evalEMA(currentPrice, ema):
-    return (currentPrice <= ema * 1.05) and (currentPrice >= ema * 0.95)
+    return (currentPrice <= ema * 1.02) and (currentPrice >= ema * 0.98)
 
 
+# Sends webhook text and message
 async def sendWebhook(message):
     async with aiohttp.ClientSession() as session:
         webhook = Webhook.from_url(webhookURL, adapter=AsyncWebhookAdapter(session))
@@ -88,12 +77,10 @@ async def sendWebhook(message):
 
 # Returns boolean value of if the ticket went off or not
 async def handlePriceLevelTicket(t, s):
-    currentPrice = await getPriceOfTicker(t["symbol"], apiKey, s)
-    alertPrice = evalPriceSignal(currentPrice, t["signal"], t["price"])
+    current = await getPriceOfTicker(t["symbol"], apiKey, s)
+    alertPrice = evalPriceSignal(current["ask"], t["signal"], t["price"])
     if alertPrice:
-        message = (
-            f"{t['symbol']} hit signal of {t['signal']} {t['price']} at {currentPrice}"
-        )
+        message = f"{t['symbol']} hit signal of {t['signal']} {t['price']} at {current['ask']}"
         await sendWebhook(message)
         return True
     return False
@@ -102,22 +89,9 @@ async def handlePriceLevelTicket(t, s):
 # Alerts EMA type tickets
 # Returns boolean value of if the ticket went off or not
 async def handleEmaTicket(t, s):
-    intervalTranslator = {
-        "1": "1 Minute",
-        "5": "5 Minutes",
-        "15": "15 Minutes",
-        "30": "30 Minutes",
-        "60": "60 Minutes",
-        "D": "Daily",
-        "W": "Weekly",
-        "M": "Monthly",
-        "Y": "Yearly",
-    }
-    emaAlert = await alertEMA(t["symbol"], "D", 10, apiKey, s)
+    emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["time_period"])
     if emaAlert:
-        message = (
-            f"{t['symbol']} hit EMA level on the {intervalTranslator[t['interval']]}.\n"
-        )
+        message = f"{t['symbol']} hit EMA level on the {t['interval']}.\n"
         await sendWebhook(message)
         return True
     return False
@@ -140,7 +114,14 @@ async def pollTickers(tickets):
         return notAlertedTickets
 
 
+async def test():
+    global apiKey
+    async with aiohttp.ClientSession() as s:
+        t = {"type": "ema", "symbol": "AAPL", "timespan": "day", "time_period": 50}
+        r = await handleEmaTicket(t, s)
+        print(r)
+
+
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(pollTickers([]))
-    # print(calculateTimePeriod("D", 100))
+    loop.run_until_complete(test())

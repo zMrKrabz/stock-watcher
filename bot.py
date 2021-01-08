@@ -47,7 +47,7 @@ class Commands(commands.Cog):
             tickets.append(
                 {
                     "type": "price_level",
-                    "symbol": symbol,
+                    "symbol": symbol.upper(),
                     "price": price,
                     "signal": signal,
                 }
@@ -57,18 +57,18 @@ class Commands(commands.Cog):
             await ctx.send(f"You sent {signal}. Signal must be ABOVE or BELOW")
 
     @commands.command(name="ema")
-    async def ema(self, ctx, symbol: str, interval: str, time_period: int):
+    async def ema(self, ctx, symbol: str, timespan: str, time_period: int):
         """
         Adds an EMA watcher to tickets
         symbol should be capitalized stock ticker
-        interval - 1, 5, 15, 30, 60 (minutes) or D, W, M (day, week, month) candle
+        timespan - minute | hour | day | week | month | quarter | year
         time_period - How many candles should the EMA consider
         """
 
-        intervalTypes = ["1", "5", "15", "30", "60", "D", "W", "M"]
-        if interval not in intervalTypes:
+        intervalTypes = ["minute", "hour", "day", "week", "month", "quarter", "year"]
+        if timespan not in intervalTypes:
             await ctx.send(
-                f"You sent {interval} but interval must be {' '.join(intervalTypes)}"
+                f"You sent {timespan} but interval must be {' '.join(intervalTypes)}"
             )
             return
 
@@ -80,9 +80,9 @@ class Commands(commands.Cog):
 
         ticket = {
             "type": "ema",
-            "symbol": symbol,
-            "interval": interval,
-            time_period: time_period,
+            "symbol": symbol.upper(),
+            "timespan": timespan,
+            "time_period": time_period,
         }
         tickets.append(ticket)
         await ctx.send("Successfully added EMA signal to tickets")

@@ -3,3 +3,4 @@ discordpy
 aiohttp
 cchardet
 aiodns
+TA-lib
