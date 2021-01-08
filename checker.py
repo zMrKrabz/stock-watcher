@@ -25,11 +25,11 @@ async def getPriceOfTicker(symbol, apiKey, s):
     return {"ask": data["last"]["askprice"], "bid": data["last"]["bidprice"]}
 
 
-def evalPriceSignal(price, signal, signalPrice):
-    if signal == "ABOVE":
-        return (price == signalPrice) or (price > signalPrice)
-    elif signal == "BELOW":
-        return (price == signalPrice) or (price < signalPrice)
+# Returns boolean of if the current price is within target price bounds
+def evalPriceSignal(currentPrice: float, targetPrice: float, margin: float):
+    return (currentPrice > ((1 - margin) * targetPrice)) and (
+        currentPrice < ((1 + margin) * targetPrice)
+    )
 
 
 # Get all candles over a certain interval
@@ -78,9 +78,9 @@ async def sendWebhook(message):
 # Returns boolean value of if the ticket went off or not
 async def handlePriceLevelTicket(t, s):
     current = await getPriceOfTicker(t["symbol"], apiKey, s)
-    alertPrice = evalPriceSignal(current["ask"], t["signal"], t["price"])
+    alertPrice = evalPriceSignal(current["ask"], t["price"], t["margin"])
     if alertPrice:
-        message = f"{t['symbol']} hit signal of {t['signal']} {t['price']} at {current['ask']}"
+        message = f"{t['symbol']} hit signal of {t['price']} around {t['margin']}. Currently trading for {current['ask']}"
         await sendWebhook(message)
         return True
     return False

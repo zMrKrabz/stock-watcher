@@ -31,30 +31,29 @@ class Commands(commands.Cog):
         await ctx.send(message)
 
     @commands.command(name="price")
-    async def price(self, ctx, symbol: str, price: float, signal: str):
+    async def price(self, ctx, symbol: str, price: float, margin: float):
         """
         Add a price level ticket to monitor
-        symbol should be capitalized stock ticker
-        price should be the price in float (ex. 60.1)
-        signal should be "ABOVE" or "BELOW"
+        symbol - capitalized stock ticker
+        price - the price in float (ex. 60.1)
+        margin - float % if target bounds. Ex. If input is 0.05, it will alert when stock is around 5% of the target price
         """
 
         if price < 0:
             await ctx.send("Price can not be below 0")
             return
 
-        if (signal == "ABOVE") or (signal == "BELOW"):
-            tickets.append(
-                {
-                    "type": "price_level",
-                    "symbol": symbol.upper(),
-                    "price": price,
-                    "signal": signal,
-                }
-            )
-            await ctx.send("Successfully added price level signal to tickets")
-        else:
-            await ctx.send(f"You sent {signal}. Signal must be ABOVE or BELOW")
+        if (margin < 0) or (margin > 100):
+            await ctx.send("Margin is above 100 or below 0, please modify")
+        tickets.append(
+            {
+                "type": "price_level",
+                "symbol": symbol.upper(),
+                "price": price,
+                "margin": margin,
+            }
+        )
+        await ctx.send(f"Successfully added {symbol}@{price} {margin}")
 
     @commands.command(name="ema")
     async def ema(self, ctx, symbol: str, timespan: str, time_period: int):
@@ -88,7 +87,7 @@ class Commands(commands.Cog):
         await ctx.send("Successfully added EMA signal to tickets")
 
 
-@tasks.loop(seconds=5.0)
+@tasks.loop(seconds=0.5)
 async def monitorTickets():
     global tickets
     newTickets = await pollTickers(tickets)
