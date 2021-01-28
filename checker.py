@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from discord import Webhook, AsyncWebhookAdapter
 from talib import EMA
 import numpy as np
+import unittest
 
 apiKey = os.environ["APCA_API_KEY_ID"]
 webhookURL = os.environ["WEBHOOK_URL"]
@@ -27,13 +28,13 @@ async def getPriceOfTicker(symbol, apiKey, s):
 
 # Returns boolean of if the current price is within target price bounds
 def evalPriceSignal(currentPrice: float, targetPrice: float, margin: float):
-    return (currentPrice > ((1 - margin) * targetPrice)) and (
-        currentPrice < ((1 + margin) * targetPrice)
+    return (targetPrice + margin > currentPrice) and (
+        targetPrice - margin < currentPrice
     )
 
 
 # Get all candles over a certain interval
-# Returns array of last close price
+# Returns array of candles
 async def getCandles(s, symbol, multiplier, timespan, limit):
     params = {"apiKey": apiKey, "sort": "desc", "limit": limit, "unadjusted": "true"}
     paramString = urllib.parse.urlencode(params)
@@ -45,8 +46,12 @@ async def getCandles(s, symbol, multiplier, timespan, limit):
     )
     data = await resp.json()
     data["results"].reverse()
-    candles = [float(d["c"]) for d in data["results"]]
-    return np.asarray(candles, dtype=np.float)
+
+    """
+    Results array of 
+    {'v': 155217709.0, 'vw': 142.6006, 'o': 143.07, 'c': 142.92, 'h': 145.09, 'l': 136.54, 't': 1611550800000}
+    """
+    return data["results"]
 
 
 """
@@ -58,7 +63,8 @@ Code to handle EMA related functions
 # returns boolean if ema should be alerted
 async def alertEMA(s, symbol, timespan, timeperiod):
     candles = await getCandles(s, symbol, 1, timespan, timeperiod)
-    data = EMA(candles, timeperiod=timeperiod)
+    df = np.asarray([float(d["c"]) for d in candles])
+    data = EMA(df, timeperiod=timeperiod)
     ema = data[-1]
     return evalEMA(candles[-1], ema)
 
@@ -114,14 +120,35 @@ async def pollTickers(tickets):
         return notAlertedTickets
 
 
-async def test():
-    global apiKey
-    async with aiohttp.ClientSession() as s:
-        t = {"type": "ema", "symbol": "AAPL", "timespan": "day", "time_period": 50}
-        r = await handleEmaTicket(t, s)
-        print(r)
+class TestSignalEval(unittest.TestCase):
+    def test_price_range_high(self):
+        signal = evalPriceSignal(96, 100, 5)
+        self.assertTrue(signal)
+
+    def test_price_range_below(self):
+        signal = evalPriceSignal(101, 100, 5)
+        self.assertTrue(signal)
+
+    def test_price_range_too_high(self):
+        signal = evalPriceSignal(106, 100, 5)
+        self.assertFalse(signal)
+
+    def test_price_range_too_low(self):
+        signal = evalPriceSignal(90, 100, 5)
+        self.assertFalse(signal)
+
+
+class TestAPICalls(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.session = aiohttp.ClientSession()
+
+    async def test_get_candles(self):
+        candles = await getCandles(self.session, "AAPL", 1, "day", 10)
+        print(candles)
+
+    async def asyncTearDown(self):
+        await self.session.close()
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(test())
+    unittest.main()

@@ -21,10 +21,10 @@ class Commands(commands.Cog):
         for t in tickets:
             if t["type"] == "price_level":
                 message += (
-                    f"Watching for {t['symbol']} to go {t['signal']} {t['price']}\n"
+                    f"Watching {t['symbol']} @{t['price']} around {t['margin']}\n"
                 )
             elif t["type"] == "ema":
-                message += f"Watching for {t['symbol']} to touch ema at {t['interval']} candle in {t['time_period']} periods"
+                message += f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods"
 
         if message == "":
             message = "There are no tickets being monitored"
@@ -36,15 +36,17 @@ class Commands(commands.Cog):
         Add a price level ticket to monitor
         symbol - capitalized stock ticker
         price - the price in float (ex. 60.1)
-        margin - float % if target bounds. Ex. If input is 0.05, it will alert when stock is around 5% of the target price
+        margin - float $ if target bounds. Ex. If input is 0.05, it will alert when stock is around .05 dollars of the target
         """
 
         if price < 0:
             await ctx.send("Price can not be below 0")
             return
 
-        if (margin < 0) or (margin > 100):
-            await ctx.send("Margin is above 100 or below 0, please modify")
+        if margin < 0:
+            await ctx.send("Margin can not be below 0")
+            return
+
         tickets.append(
             {
                 "type": "price_level",

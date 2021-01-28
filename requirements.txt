@@ -4,3 +4,4 @@ aiohttp
 cchardet
 aiodns
 TA-lib
+mplfinance
