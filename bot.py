@@ -4,31 +4,51 @@ import time
 import os
 import discord
 from discord.ext import tasks, commands
+from discord.ext import menus
 from checker import pollTickers
+from db import TicketDB
 
-tickets = []
+
+class TicketsMenu(menus.ListPageSource):
+    def __init__(self, tickets):
+        """
+        Takes raw tickets and formats them into messages that appear on a menu
+        """
+        super().__init__(tickets, per_page=10)
+
+    async def format_page(self, menu, entries):
+        offset = menu.current_page * self.per_page
+
+        data = []
+        for t in entries:
+            if t["type"] == "price_level":
+                data.append(
+                    f"Watching {t['symbol']} @{t['price']} around {t['margin']}. ID: {t['id']}"
+                )
+            elif t["type"] == "ema":
+                data.append(
+                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods. ID{t['id']}"
+                )
+        message = "\n".join(d for d in data)
+        return message
 
 
 class Commands(commands.Cog):
     """Basic commands for the bot"""
 
+    def __init__(self):
+        self.db = TicketDB("alerts.db")
+        self.monitorTickets.start()
+
     @commands.command(name="tickets")
-    async def getTickets(self, ctx):
+    async def getTickets(self, ctx, category: str):
         """
         Replies with all the tickets that are currently being monitored
+        category - price_level or ema, depending on the tickets u want to see
         """
-        message = ""
-        for t in tickets:
-            if t["type"] == "price_level":
-                message += (
-                    f"Watching {t['symbol']} @{t['price']} around {t['margin']}\n"
-                )
-            elif t["type"] == "ema":
-                message += f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods"
-
-        if message == "":
-            message = "There are no tickets being monitored"
-        await ctx.send(message)
+        tickets = self.db.getAllTickets(category)
+        pages = menus.MenuPages(source=TicketsMenu(tickets), clear_reactions_after=True)
+        await pages.start(ctx)
 
     @commands.command(name="price")
     async def price(self, ctx, symbol: str, price: float, margin: float):
@@ -47,7 +67,7 @@ class Commands(commands.Cog):
             await ctx.send("Margin can not be below 0")
             return
 
-        tickets.append(
+        _id = self.db.insertTicket(
             {
                 "type": "price_level",
                 "symbol": symbol.upper(),
@@ -55,7 +75,7 @@ class Commands(commands.Cog):
                 "margin": margin,
             }
         )
-        await ctx.send(f"Successfully added {symbol}@{price} {margin}")
+        await ctx.send(f"Successfully added {symbol}@{price} {margin}, id {_id}")
 
     @commands.command(name="ema")
     async def ema(self, ctx, symbol: str, timespan: str, time_period: int):
@@ -85,18 +105,30 @@ class Commands(commands.Cog):
             "timespan": timespan,
             "time_period": time_period,
         }
-        tickets.append(ticket)
+        self.db.insertTicket(ticket)
         await ctx.send("Successfully added EMA signal to tickets")
 
+    @commands.command(name="delete")
+    async def delete(self, ctx, _id: str):
+        """
+        Deletes alert from database
+        Parameters:
+        _id: id of the ticket
+        """
+        success = self.db.deleteTicket(_id)
 
-@tasks.loop(seconds=0.5)
-async def monitorTickets():
-    global tickets
-    newTickets = await pollTickers(tickets)
-    tickets = newTickets
+        if success == None:
+            await ctx.send("Unable to delete alert with ID " + _id)
+            return
 
+        await ctx.send(f"Deleted ticket {_id}")
+        return
 
-monitorTickets.start()
+    @tasks.loop(seconds=0.5)
+    async def monitorTickets(self):
+        tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets("ema")
+        await pollTickers(tickets)
+
 
 clientSecret = os.environ["CLIENT_SECRET"]
 bot = commands.Bot(command_prefix="$")

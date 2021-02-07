@@ -1,7 +1,8 @@
 pandas
-discordpy
+discord.py
 aiohttp
 cchardet
 aiodns
-TA-lib
+TA-Lib
 mplfinance
+git+https://github.com/Rapptz/discord-ext-menus
