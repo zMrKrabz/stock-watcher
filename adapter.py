@@ -13,8 +13,8 @@ def emaAdapter(doc: tuple):
     return {
         "type": "ema",
         "symbol": doc[0],
-        "price": doc[1],
-        "margin": doc[2],
+        "timespan": doc[1],
+        "time_period": doc[2],
         "id": doc[3],
         "timestamp": doc[4],
     }

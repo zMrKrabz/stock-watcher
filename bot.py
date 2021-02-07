@@ -47,6 +47,11 @@ class Commands(commands.Cog):
         category - price_level or ema, depending on the tickets u want to see
         """
         tickets = self.db.getAllTickets(category)
+
+        if tickets == None:
+            await ctx.send(f"No tickets have been made in {category}")
+            return
+
         pages = menus.MenuPages(source=TicketsMenu(tickets), clear_reactions_after=True)
         await pages.start(ctx)
 

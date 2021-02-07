@@ -16,7 +16,7 @@ class TicketDB:
                 "CREATE TABLE IF NOT EXISTS price_level (symbol TEXT, price FLOAT, margin FLOAT, id TEXT, timestamp INTEGER)"
             )
             c.execute(
-                "CREATE TABLE IF NOT EXISTS ema (symbol TEXT, timespan TEXT, time_period INTEGER, id TEXT timestamp INTEGER)"
+                "CREATE TABLE IF NOT EXISTS ema (symbol TEXT, timespan TEXT, time_period INTEGER, id TEXT, timestamp INTEGER)"
             )
             c.close()
 

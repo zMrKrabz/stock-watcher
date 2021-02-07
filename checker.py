@@ -66,11 +66,11 @@ async def alertEMA(s, symbol, timespan, timeperiod):
     df = np.asarray([float(d["c"]) for d in candles])
     data = EMA(df, timeperiod=timeperiod)
     ema = data[-1]
-    return evalEMA(candles[-1], ema)
+    return evalEMA(candles[-1]["c"], ema)
 
 
 # Evaluates and sees if ema is within 2% of target price level
-def evalEMA(currentPrice, ema):
+def evalEMA(currentPrice: float, ema: float):
     return (currentPrice <= ema * 1.02) and (currentPrice >= ema * 0.98)
 
 
