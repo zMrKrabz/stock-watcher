@@ -34,19 +34,44 @@ def evalPriceSignal(currentPrice: float, targetPrice: float, margin: float):
     )
 
 
+def convertLimit(timespan: str, limit: int):
+    """
+    Converts desired limit (ex. 50 hours) into minute format
+    """
+    if timespan == "minute":
+        return limit
+    if timespan == "hour":
+        return limit * 60
+    if timespan == "day":
+        return limit * 60 * 24
+    if timespan == "week":
+        return limit * 60 * 24 * 7
+    if timespan == "month":
+        return limit * 60 * 24 * 7 * 4
+    if timespan == "quarter":
+        return limit * 60 * 24 * 7 * 4 * 4
+    if timespan == "year":
+        return limit * 60 * 24 * 7 * 4 * 4 * 4
+
+
 # Get all candles over a certain interval
 # Returns array of candles
 async def getCandles(s, symbol, multiplier, timespan, limit):
-    params = {"apiKey": apiKey, "sort": "desc", "limit": limit, "unadjusted": "true"}
+    params = {
+        "apiKey": apiKey,
+        "sort": "desc",
+        "limit": convertLimit(timespan, limit),
+        "unadjusted": "true",
+    }
     paramString = urllib.parse.urlencode(params)
     start = "2000-10-14"
     end = datetime.now().strftime("%Y-%m-%d")
-    resp = await s.get(
+    url = (
         f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start}/{end}?"
         + paramString
     )
+    resp = await s.get(url)
     data = await resp.json()
-    print(data)
     data["results"].reverse()
 
     """
