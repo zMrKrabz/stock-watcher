@@ -178,12 +178,12 @@ class Tests(unittest.TestCase):
     def test_crudOperations(self):
         ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
         # Create and Read
-        t = self.db.insertTicket(ticket)
-        check = self.db.getTicket(t["id"])
+        _id = self.db.insertTicket(ticket)
+        check = self.db.getTicket(_id)
         self.assertEqual(ticket["type"], check["type"])
 
         # Delete
-        success = self.db.deleteTicket(t["id"])
+        success = self.db.deleteTicket(_id)
         self.assertEqual(success, True)
 
     def test_fetchBadTicketType(self):
@@ -195,8 +195,8 @@ class Tests(unittest.TestCase):
         Delete inserted alert with ID
         """
         ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
-        t = self.db.insertTicket(ticket)
-        success = self.db.deleteTicket(t["id"])
+        _id = self.db.insertTicket(ticket)
+        success = self.db.deleteTicket(_id)
         self.assertEqual(success, True)
         pass
 

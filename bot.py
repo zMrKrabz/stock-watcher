@@ -27,7 +27,7 @@ class TicketsMenu(menus.ListPageSource):
                 )
             elif t["type"] == "ema":
                 data.append(
-                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods. ID{t['id']}"
+                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods. ID: {t['id']}"
                 )
         message = "\n".join(d for d in data)
         return message
@@ -132,7 +132,7 @@ class Commands(commands.Cog):
     @tasks.loop(seconds=0.5)
     async def monitorTickets(self):
         tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets("ema")
-        await pollTickers(tickets)
+        await pollTickers(tickets, self.db)
 
 
 clientSecret = os.environ["CLIENT_SECRET"]

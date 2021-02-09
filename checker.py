@@ -8,6 +8,7 @@ from discord import Webhook, AsyncWebhookAdapter
 from talib import EMA
 import numpy as np
 import unittest
+from db import TicketDB
 
 apiKey = os.environ["APCA_API_KEY_ID"]
 webhookURL = os.environ["WEBHOOK_URL"]
@@ -97,16 +98,15 @@ async def handlePriceLevelTicket(t, s):
 async def handleEmaTicket(t, s):
     emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["time_period"])
     if emaAlert:
-        message = f"{t['symbol']} hit EMA level on the {t['interval']}.\n"
+        message = f"{t['symbol']} hit EMA level on the {t['timespan']} candle.\n"
         await sendWebhook(message)
         return True
     return False
 
 
 # Polls all tickers and if ticker is at signal, delete ticker then send discord webhook
-async def pollTickers(tickets):
+async def pollTickers(tickets: list, db: TicketDB):
     async with aiohttp.ClientSession() as s:
-        notAlertedTickets = []
         for t in tickets:
             alerted = False
             if t["type"] == "price_level":
@@ -114,10 +114,8 @@ async def pollTickers(tickets):
             elif t["type"] == "ema":
                 alerted = await handleEmaTicket(t, s)
 
-            if alerted == False:
-                notAlertedTickets.append(t)
-
-        return notAlertedTickets
+            if alerted:
+                db.deleteTicket(t["id"])
 
 
 class TestSignalEval(unittest.TestCase):
