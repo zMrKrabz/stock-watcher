@@ -134,14 +134,17 @@ async def handleEmaTicket(t, s):
 async def pollTickers(tickets: list, db: TicketDB):
     async with aiohttp.ClientSession() as s:
         for t in tickets:
-            alerted = False
-            if t["type"] == "price_level":
-                alerted = await handlePriceLevelTicket(t, s)
-            elif t["type"] == "ema":
-                alerted = await handleEmaTicket(t, s)
+            try:
+                alerted = False
+                if t["type"] == "price_level":
+                    alerted = await handlePriceLevelTicket(t, s)
+                elif t["type"] == "ema":
+                    alerted = await handleEmaTicket(t, s)
 
-            if alerted:
-                db.deleteTicket(t["id"])
+                if alerted:
+                    db.deleteTicket(t["id"])
+            except Exception:
+                print(f"Errored on {t}")
 
 
 class TestSignalEval(unittest.TestCase):
