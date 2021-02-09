@@ -6,6 +6,7 @@ def priceLevelAdapter(doc: tuple):
         "margin": doc[2],
         "id": doc[3],
         "timestamp": doc[4],
+        "timeout": doc[5],
     }
 
 
@@ -17,4 +18,5 @@ def emaAdapter(doc: tuple):
         "time_period": doc[2],
         "id": doc[3],
         "timestamp": doc[4],
+        "timeout": doc[5],
     }

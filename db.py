@@ -13,10 +13,29 @@ class TicketDB:
             self.conn = sqlite3.connect(path)
             c = self.conn.cursor()
             c.execute(
-                "CREATE TABLE IF NOT EXISTS price_level (symbol TEXT, price FLOAT, margin FLOAT, id TEXT, timestamp INTEGER)"
+                """
+                CREATE TABLE IF NOT EXISTS 
+                    price_level (
+                        symbol TEXT, 
+                        price FLOAT, 
+                        margin FLOAT, 
+                        id TEXT, 
+                        timestamp INTEGER, 
+                        timeout INTEGER
+                    )
+                """
             )
             c.execute(
-                "CREATE TABLE IF NOT EXISTS ema (symbol TEXT, timespan TEXT, time_period INTEGER, id TEXT, timestamp INTEGER)"
+                """CREATE TABLE IF NOT EXISTS 
+                    ema (
+                        symbol TEXT, 
+                        timespan TEXT, 
+                        time_period INTEGER, 
+                        id TEXT, 
+                        timestamp INTEGER,
+                        timeout INTEGER
+                    )
+                """
             )
             c.close()
 
@@ -49,33 +68,21 @@ class TicketDB:
         if ticketType not in tables:
             return None
 
-        doc = c.execute(
+        rows = c.execute(
             "SELECT * FROM table WHERE id=?".replace("table", ticketType),
             (_id,),
         )
-        ticket = doc.fetchone()
+        doc = rows.fetchone()
 
         c.close()
-        if ticket == None:
+        if doc == None:
             return None
 
         if ticketType == "price_level":
-            return {
-                "type": "price_level",
-                "symbol": ticket[0],
-                "price": ticket[1],
-                "margin": ticket[2],
-                "id": ticket[3],
-            }
+            return adapter.priceLevelAdapter(doc)
 
         if ticketType == "ema":
-            return {
-                "type": "ema",
-                "symbol": ticket[0],
-                "timespan": ticket[1],
-                "time_period": ticket[2],
-                "id": ticket[3],
-            }
+            return adapter.emaAdapter(doc)
 
     def insertTicket(self, ticket: dict):
         """
@@ -89,7 +96,7 @@ class TicketDB:
         c.execute(
             """
             INSERT INTO table 
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 0)
             """.replace(
                 "table", ticket["type"]
             ),
@@ -98,6 +105,24 @@ class TicketDB:
         c.close()
         self.conn.commit()
         return ticket["id"]
+
+    def timeoutTicket(self, _id: str, timeout: int):
+        c = self.conn.cursor()
+        ticketType = _id.split("-")[0]
+        c.execute(
+            """
+        UPDATE 
+            table
+        SET 
+            timeout=?
+        WHERE
+            id=? 
+        """.replace(
+                "table", ticketType
+            ),
+            (timeout, _id),
+        )
+        self.conn.commit()
 
     def deleteTicket(self, _id: str):
         """

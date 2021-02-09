@@ -134,6 +134,9 @@ async def handleEmaTicket(t, s):
 async def pollTickers(tickets: list, db: TicketDB):
     async with aiohttp.ClientSession() as s:
         for t in tickets:
+            if int(time.time()) < t["timeout"]:
+                continue
+
             try:
                 alerted = False
                 if t["type"] == "price_level":
@@ -142,7 +145,8 @@ async def pollTickers(tickets: list, db: TicketDB):
                     alerted = await handleEmaTicket(t, s)
 
                 if alerted:
-                    db.deleteTicket(t["id"])
+                    timeout = int(time.time()) + convertLimit(t["timespan"], 2) * 60
+                    db.timeoutTicket(t["id"], timeout)
             except Exception:
                 print(f"Errored on {t}")
 
