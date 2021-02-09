@@ -98,7 +98,7 @@ async def alertEMA(s, symbol, timespan, timeperiod):
 
 # Evaluates and sees if ema is within 2% of target price level
 def evalEMA(currentPrice: float, ema: float):
-    return (currentPrice <= ema * 1.02) and (currentPrice >= ema * 0.98)
+    return (currentPrice <= ema * 1.004) and (currentPrice >= ema * 0.996)
 
 
 # Sends webhook text and message
@@ -124,7 +124,7 @@ async def handlePriceLevelTicket(t, s):
 async def handleEmaTicket(t, s):
     emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["time_period"])
     if emaAlert:
-        message = f"{t['symbol']} hit EMA level on the {t['timespan']} candle.\n"
+        message = f"{t['symbol']} hit EMA {t['time_period']} level on the {t['timespan']} candle.\n"
         await sendWebhook(message)
         return True
     return False
