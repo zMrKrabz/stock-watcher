@@ -46,6 +46,7 @@ async def getCandles(s, symbol, multiplier, timespan, limit):
         + paramString
     )
     data = await resp.json()
+    print(data)
     data["results"].reverse()
 
     """
