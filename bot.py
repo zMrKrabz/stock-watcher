@@ -7,6 +7,7 @@ from discord.ext import tasks, commands
 from discord.ext import menus
 from checker import pollTickers
 from db import TicketDB
+from datetime import datetime, time
 
 
 class TicketsMenu(menus.ListPageSource):
@@ -131,8 +132,14 @@ class Commands(commands.Cog):
 
     @tasks.loop(seconds=0.5)
     async def monitorTickets(self):
-        tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets("ema")
-        await pollTickers(tickets, self.db)
+        now = datetime.utcnow().time()
+        start = time(14, 0)
+        end = time(21, 0)
+        if now > start and now < end:
+            tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets(
+                "ema"
+            )
+            await pollTickers(tickets, self.db)
 
 
 clientSecret = os.environ["CLIENT_SECRET"]

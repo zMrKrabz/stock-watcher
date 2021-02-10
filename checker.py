@@ -141,14 +141,18 @@ async def pollTickers(tickets: list, db: TicketDB):
                 alerted = False
                 if t["type"] == "price_level":
                     alerted = await handlePriceLevelTicket(t, s)
+                    t["timespan"] = "day"
                 elif t["type"] == "ema":
                     alerted = await handleEmaTicket(t, s)
 
                 if alerted:
                     timeout = int(time.time()) + convertLimit(t["timespan"], 2) * 60
                     db.timeoutTicket(t["id"], timeout)
-            except Exception:
+            except Exception as e:
                 print(f"Errored on {t}")
+                print(e)
+                await sendWebhook(f"Error at {t}")
+                db.deleteTicket(t["id"])
 
 
 class TestSignalEval(unittest.TestCase):
