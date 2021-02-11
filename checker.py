@@ -98,7 +98,7 @@ async def alertEMA(s, symbol, timespan, timeperiod):
 
 # Evaluates and sees if ema is within 2% of target price level
 def evalEMA(currentPrice: float, ema: float):
-    return (currentPrice <= ema * 1.002) and (currentPrice >= ema * 0.998)
+    return (currentPrice <= ema * 1.001) and (currentPrice >= ema * 0.999)
 
 
 # Sends webhook text and message
@@ -146,7 +146,7 @@ async def pollTickers(tickets: list, db: TicketDB):
                     alerted = await handleEmaTicket(t, s)
 
                 if alerted:
-                    timeout = int(time.time()) + convertLimit(t["timespan"], 2) * 60
+                    timeout = int(time.time()) + convertLimit(t["timespan"], 4) * 60
                     db.timeoutTicket(t["id"], timeout)
             except Exception as e:
                 print(f"Errored on {t}")
