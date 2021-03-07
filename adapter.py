@@ -7,6 +7,8 @@ def priceLevelAdapter(doc: tuple):
         "id": doc[3],
         "timestamp": doc[4],
         "timeout": doc[5],
+        "channelID": doc[6],
+        "authorID": doc[7]
     }
 
 
@@ -15,8 +17,10 @@ def emaAdapter(doc: tuple):
         "type": "ema",
         "symbol": doc[0],
         "timespan": doc[1],
-        "time_period": doc[2],
+        "multiplier": doc[2],
         "id": doc[3],
         "timestamp": doc[4],
         "timeout": doc[5],
+        "channelID": doc[6],
+        "authorID": doc[7]
     }

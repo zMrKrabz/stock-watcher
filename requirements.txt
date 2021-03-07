@@ -5,4 +5,5 @@ cchardet
 aiodns
 TA-Lib
 mplfinance
+pandas
 git+https://github.com/Rapptz/discord-ext-menus

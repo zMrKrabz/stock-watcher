@@ -5,10 +5,30 @@ import os
 import discord
 from discord.ext import tasks, commands
 from discord.ext import menus
-from checker import pollTickers
+from checker import pollTickets
 from db import TicketDB
 from datetime import datetime, time
 
+"""
+Base ticket
+channelID: str - Will send ticket to this channel
+author: str - Will @ this person in chat when ticket hits
+type: str - Currently supports price_level, ema. Future supports RSI
+symbol: str - The ticker to watch
+id: str - Unique identifier for ticket
+"""
+
+"""
+Price level ticket
+price: float - Price that the person expects to hit
+margin: float - the dollar amount around the price
+"""
+
+"""
+EMA ticket
+timespan: str - minute, hour, day
+multiplier: int - how many timespans
+"""
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
@@ -18,8 +38,6 @@ class TicketsMenu(menus.ListPageSource):
         super().__init__(tickets, per_page=10)
 
     async def format_page(self, menu, entries):
-        offset = menu.current_page * self.per_page
-
         data = []
         for t in entries:
             if t["type"] == "price_level":
@@ -28,7 +46,7 @@ class TicketsMenu(menus.ListPageSource):
                 )
             elif t["type"] == "ema":
                 data.append(
-                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle in {t['time_period']} periods. ID: {t['id']}"
+                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle with {t['multiplier']} multiplier. ID: {t['id']}"
                 )
         message = "\n".join(d for d in data)
         return message
@@ -37,9 +55,10 @@ class TicketsMenu(menus.ListPageSource):
 class Commands(commands.Cog):
     """Basic commands for the bot"""
 
-    def __init__(self):
+    def __init__(self, bot):
         self.db = TicketDB("alerts.db")
         self.monitorTickets.start()
+        self.bot = bot
 
     @commands.command(name="tickets")
     async def getTickets(self, ctx, category: str):
@@ -55,6 +74,10 @@ class Commands(commands.Cog):
 
         pages = menus.MenuPages(source=TicketsMenu(tickets), clear_reactions_after=True)
         await pages.start(ctx)
+
+    @getTickets.error
+    async def getTicketsError(self, ctx, error):
+        await ctx.send(error)
 
     @commands.command(name="price")
     async def price(self, ctx, symbol: str, price: float, margin: float):
@@ -79,29 +102,25 @@ class Commands(commands.Cog):
                 "symbol": symbol.upper(),
                 "price": price,
                 "margin": margin,
+                "channelID": ctx.channel.id,
+                "author": ctx.author.id
             }
         )
-        await ctx.send(f"Successfully added {symbol}@{price} {margin}, id {_id}")
+        await ctx.send(f"Successfully added {symbol}@{price} {margin}, id {_id} <@{ctx.author.id}>")
 
     @commands.command(name="ema")
-    async def ema(self, ctx, symbol: str, timespan: str, time_period: int):
+    async def ema(self, ctx, symbol: str, timespan: str, multiplier=1):
         """
         Adds an EMA watcher to tickets
         symbol should be capitalized stock ticker
-        timespan - minute | hour | day | week | month | quarter | year
-        time_period - How many candles should the EMA consider
+        timespan - minute | hour | day 
+        multiplier: int - how many timespans
         """
 
-        intervalTypes = ["minute", "hour", "day", "week", "month", "quarter", "year"]
+        intervalTypes = ["minute", "hour", "day"]
         if timespan not in intervalTypes:
             await ctx.send(
                 f"You sent {timespan} but interval must be {' '.join(intervalTypes)}"
-            )
-            return
-
-        if time_period < 3:
-            await ctx.send(
-                f"You sent {time_period} but timer_period must be greater than 3"
             )
             return
 
@@ -109,10 +128,12 @@ class Commands(commands.Cog):
             "type": "ema",
             "symbol": symbol.upper(),
             "timespan": timespan,
-            "time_period": time_period,
+            "multiplier": multiplier,
+            "channelID": ctx.channel.id,
+            "author": ctx.author.id
         }
         self.db.insertTicket(ticket)
-        await ctx.send("Successfully added EMA signal to tickets")
+        await ctx.send(f"Successfully added EMA signal to tickets <@{ctx.author.id}>")
 
     @commands.command(name="delete")
     async def delete(self, ctx, _id: str):
@@ -139,11 +160,12 @@ class Commands(commands.Cog):
             tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets(
                 "ema"
             )
-            await pollTickers(tickets, self.db)
+            await pollTickets(tickets, self.db, self.bot)
 
 
 clientSecret = os.environ["CLIENT_SECRET"]
 bot = commands.Bot(command_prefix="$")
 
-bot.add_cog(Commands())
+bot.add_cog(Commands(bot))
+print("Started bot")
 bot.run(clientSecret)

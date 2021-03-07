@@ -21,7 +21,9 @@ class TicketDB:
                         margin FLOAT, 
                         id TEXT, 
                         timestamp INTEGER, 
-                        timeout INTEGER
+                        timeout INTEGER,
+                        channelID TEXT,
+                        author TEXT
                     )
                 """
             )
@@ -30,10 +32,12 @@ class TicketDB:
                     ema (
                         symbol TEXT, 
                         timespan TEXT, 
-                        time_period INTEGER, 
+                        multiplier INTEGER, 
                         id TEXT, 
                         timestamp INTEGER,
-                        timeout INTEGER
+                        timeout INTEGER,
+                        channelID TEXT,
+                        author TEXT
                     )
                 """
             )
@@ -96,7 +100,7 @@ class TicketDB:
         c.execute(
             """
             INSERT INTO table 
-            VALUES (?, ?, ?, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
             """.replace(
                 "table", ticket["type"]
             ),

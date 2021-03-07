@@ -4,24 +4,23 @@ import urllib
 import time
 import os
 from datetime import datetime, timedelta
-from discord import Webhook, AsyncWebhookAdapter
 from talib import EMA
 import numpy as np
+import pandas as pd
 import unittest
 from db import TicketDB
 
 apiKey = os.environ["APCA_API_KEY_ID"]
-webhookURL = os.environ["WEBHOOK_URL"]
+privateKey = os.environ["APCA_API_PRIVATE_KEY"]
+headers = {"APCA-API-KEY-ID": apiKey, "APCA-API-SECRET-KEY": privateKey}
 
 """
 Functions related to simply alerting price of a ticker
 """
 # Returns latest ask and bid of a stock
-async def getPriceOfTicker(symbol, apiKey, s):
-    params = {"apiKey": apiKey}
-    paramString = urllib.parse.urlencode(params)
+async def getPriceOfTicker(symbol, s):
     resp = await s.get(
-        f"https://api.polygon.io/v1/last_quote/stocks/{symbol}?" + paramString
+        f"https://data.alpaca.markets/v1/last_quote/stocks/{symbol}", headers=headers
     )
     data = await resp.json()
     return {"ask": data["last"]["askprice"], "bid": data["last"]["bidprice"]}
@@ -34,7 +33,7 @@ def evalPriceSignal(currentPrice: float, targetPrice: float, margin: float):
     )
 
 
-def convertLimit(timespan: str, limit: int):
+def convertLimit(timespan: str, limit=1):
     """
     Converts desired limit (ex. 50 hours) into minute format
     """
@@ -56,44 +55,80 @@ def convertLimit(timespan: str, limit: int):
 
 # Get all candles over a certain interval
 # Returns array of candles
-async def getCandles(s, symbol, multiplier, timespan, limit):
-    params = {
-        "apiKey": apiKey,
-        "sort": "desc",
-        "limit": convertLimit(timespan, limit),
-        "unadjusted": "true",
-    }
-    paramString = urllib.parse.urlencode(params)
-    start = "2000-10-14"
-    end = datetime.now().strftime("%Y-%m-%d")
-    url = (
-        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start}/{end}?"
-        + paramString
+# Documentation: https://alpaca.markets/docs/api-documentation/api-v2/market-data/alpaca-data-api-v1/bars/
+async def getCandles(s, timeframe, symbol, limit=100):
+    query = {"symbols": symbol, "limit": limit}
+    queryString = urllib.parse.urlencode(query)
+    resp = await s.get(
+        f"https://data.alpaca.markets/v1/bars/{timeframe}?{queryString}",
+        headers=headers,
     )
-    resp = await s.get(url)
-    data = await resp.json()
-    data["results"].reverse()
 
+    data = await resp.json()
     """
-    Results array of 
-    {'v': 155217709.0, 'vw': 142.6006, 'o': 143.07, 'c': 142.92, 'h': 145.09, 'l': 136.54, 't': 1611550800000}
+    Results array of
+    {'t': 1614977940, 'o': 121.57, 'h': 121.72, 'l': 121.22, 'c': 121.22, 'v': 14272}
     """
-    return data["results"]
+    return data[symbol]
+
+
+def convertTimespan(timespan: str, multiplier=1):
+    # timespan - minute, hour, day
+    # multiplier - how many timespans, ex. 4 Days
+    # returns dataframe resample formatted rule
+    if timespan == "minute":
+        return str(multiplier) + "T"
+
+    if timespan == "hour":
+        return str(multiplier) + "H"
+
+    if timespan == "day":
+        return str(multiplier) + "D"
+
+
+def aggregateCandles(candles, timespan: str, multiplier=1):
+    # candles - candles from getCandles
+    # timespan - minute, hour, day
+    # multiplier - how many timespans, ex. 4 Days
+    # returns candles aggregated, with OHLCVT format
+    rule = convertTimespan(timespan, multiplier)
+    df = pd.DataFrame(candles, columns=["t", "o", "h", "l", "c", "v"])
+    df["Datetime"] = pd.to_datetime(df["t"], unit="s")
+    df = df.set_index("Datetime")
+    aggregated = df.resample(rule).agg(
+        {
+            "t": "first",
+            "o": "first",
+            "h": "max",
+            "l": "min",
+            "c": "last",
+            "v": "sum",
+        }
+    )
+    aggregated = aggregated[aggregated["t"].notna()]
+
+    return aggregated.to_dict("records")
 
 
 """
 Code to handle EMA related functions
 """
 
-# timespan - minute | hour | day | week | month | quarter | year
+# candles - Array of candles from getCandles
+# returns ema array
+async def getEMA(candles, timeperiod):
+    df = np.asarray([float(d["c"]) for d in candles])
+    data = EMA(df, timeperiod=timeperiod)
+    return data
+
+
+# timespan - One of minute, 1Min, 5Min, 15Min, day or 1D.
 # timeperiod - How many candles to use
 # returns boolean if ema should be alerted
 async def alertEMA(s, symbol, timespan, timeperiod):
-    candles = await getCandles(s, symbol, 1, timespan, timeperiod)
-    df = np.asarray([float(d["c"]) for d in candles])
-    data = EMA(df, timeperiod=timeperiod)
-    ema = data[-1]
-    return evalEMA(candles[-1]["c"], ema)
+    candles = await getCandles(s, timespan, symbol, timeperiod * 2)
+    data = getEMA(candles, timeperiod)
+    return evalEMA(candles[-1]["c"], data[-1])
 
 
 # Evaluates and sees if ema is within 2% of target price level
@@ -101,37 +136,28 @@ def evalEMA(currentPrice: float, ema: float):
     return (currentPrice <= ema * 1.001) and (currentPrice >= ema * 0.999)
 
 
-# Sends webhook text and message
-async def sendWebhook(message):
-    async with aiohttp.ClientSession() as session:
-        webhook = Webhook.from_url(webhookURL, adapter=AsyncWebhookAdapter(session))
-        await webhook.send(message)
-
-
-# Returns boolean value of if the ticket went off or not
+# Returns message if ticket was hit, else return message to send
 async def handlePriceLevelTicket(t, s):
-    current = await getPriceOfTicker(t["symbol"], apiKey, s)
+    current = await getPriceOfTicker(t["symbol"], s)
     alertPrice = evalPriceSignal(current["ask"], t["price"], t["margin"])
     if alertPrice:
-        message = f"{t['symbol']} hit signal of {t['price']} around {t['margin']}. Currently trading for {current['ask']}"
-        await sendWebhook(message)
-        return True
+        message = f"{t['symbol']} hit signal of {t['price']} around {t['margin']}. Currently trading for {current['ask']}. <@{t['author']}>"
+        return message
     return False
 
 
 # Alerts EMA type tickets
 # Returns boolean value of if the ticket went off or not
 async def handleEmaTicket(t, s):
-    emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["time_period"])
+    emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["timeperiod"])
     if emaAlert:
-        message = f"{t['symbol']} hit EMA {t['time_period']} level on the {t['timespan']} candle.\n"
-        await sendWebhook(message)
-        return True
+        message = f"{t['symbol']} hit EMA {t['time_period']} level on the {t['timespan']} candle. <@{t['author']}\n"
+        return message
     return False
 
 
-# Polls all tickers and if ticker is at signal, delete ticker then send discord webhook
-async def pollTickers(tickets: list, db: TicketDB):
+# Polls all tickets and if ticket is at signal, timeouts ticket, then sends message
+async def pollTickets(tickets: list, db: TicketDB, bot):
     async with aiohttp.ClientSession() as s:
         for t in tickets:
             if int(time.time()) < t["timeout"]:
@@ -140,18 +166,25 @@ async def pollTickers(tickets: list, db: TicketDB):
             try:
                 alerted = False
                 if t["type"] == "price_level":
-                    alerted = await handlePriceLevelTicket(t, s)
+                    message = await handlePriceLevelTicket(t, s)
                     t["timespan"] = "day"
                 elif t["type"] == "ema":
-                    alerted = await handleEmaTicket(t, s)
+                    message = await handleEmaTicket(t, s)
 
-                if alerted:
-                    timeout = int(time.time()) + convertLimit(t["timespan"], 4) * 60
+                if message:
+                    timeout = int(time.time()) + convertLimit(t["timespan"], 3) * 60
                     db.timeoutTicket(t["id"], timeout)
+                    channel = await bot.get_channel(t["channelID"])
+                    await channel.send(message)
+                else:
+                    timeout = int(time.time()) + convertLimit(t["timespan"], 1) * 60
+                    db.timeoutTicket(t["id"], timeout)
+
             except Exception as e:
                 print(f"Errored on {t}")
                 print(e)
-                await sendWebhook(f"Error at {t}")
+                channel = await bot.get_channel(t['channelID'])
+                await channel.send(f"Error occurred with {t}")
                 db.deleteTicket(t["id"])
 
 
@@ -176,10 +209,27 @@ class TestSignalEval(unittest.TestCase):
 class TestAPICalls(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.session = aiohttp.ClientSession()
+        self.symbol = "AAPL"
 
     async def test_get_candles(self):
-        candles = await getCandles(self.session, "AAPL", 1, "day", 10)
-        print(candles)
+        candles = await getCandles(self.session, "minute", self.symbol)
+        print({"candles": candles[-1]})
+
+    # Tests if EMA is good for 50 minute candles
+    async def test_getEMA(self):
+        candles = await getCandles(self.session, "minute", self.symbol, 100)
+        ema = await getEMA(candles, 50)
+        print({"ema_length": len(ema)})
+        print({"ema": ema[-1]})
+
+    async def test_get_price(self):
+        price = await getPriceOfTicker("AAPL", self.session)
+        print({"price": price})
+
+    async def test_aggregate(self):
+        candles = await getCandles(self.session, "15Min", self.symbol, 40)
+        hourCandles = aggregateCandles(candles, "hour", 1)
+        self.assertEqual(hourCandles[2]['t'] - hourCandles[1]['t'], 3600)
 
     async def asyncTearDown(self):
         await self.session.close()
