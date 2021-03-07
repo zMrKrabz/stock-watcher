@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from talib import EMA
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 import unittest
 from db import TicketDB
 
@@ -69,7 +70,13 @@ async def getCandles(s, timeframe, symbol, limit=100):
     Results array of
     {'t': 1614977940, 'o': 121.57, 'h': 121.72, 'l': 121.22, 'c': 121.22, 'v': 14272}
     """
-    return data[symbol]
+    candles = data[symbol]
+    df = pd.DataFrame(candles, columns=["t", "o", "h", "l", "c", "v"])
+    df["Datetime"] = pd.to_datetime(df["t"], unit="s")
+    df = df.set_index("Datetime")
+    df = df[df["c"] != 0]
+
+    return df
 
 
 def convertTimespan(timespan: str, multiplier=1):
@@ -86,16 +93,13 @@ def convertTimespan(timespan: str, multiplier=1):
         return str(multiplier) + "D"
 
 
-def aggregateCandles(candles, timespan: str, multiplier=1):
-    # candles - candles from getCandles
+def aggregateCandles(candles, timespan: str, multiplier=1, toDict=True):
+    # candles - candles from getCandles as dataframe
     # timespan - minute, hour, day
     # multiplier - how many timespans, ex. 4 Days
     # returns candles aggregated, with OHLCVT format
     rule = convertTimespan(timespan, multiplier)
-    df = pd.DataFrame(candles, columns=["t", "o", "h", "l", "c", "v"])
-    df["Datetime"] = pd.to_datetime(df["t"], unit="s")
-    df = df.set_index("Datetime")
-    aggregated = df.resample(rule).agg(
+    aggregated = candles.resample(rule).agg(
         {
             "t": "first",
             "o": "first",
@@ -107,28 +111,37 @@ def aggregateCandles(candles, timespan: str, multiplier=1):
     )
     aggregated = aggregated[aggregated["t"].notna()]
 
-    return aggregated.to_dict("records")
+    if toDict:
+        return aggregated.to_dict("records")
+    return aggregated
 
 
 """
 Code to handle EMA related functions
 """
 
-# candles - Array of candles from getCandles
+# candles - pandas dataframe of items
 # returns ema array
-async def getEMA(candles, timeperiod):
-    df = np.asarray([float(d["c"]) for d in candles])
-    data = EMA(df, timeperiod=timeperiod)
-    return data
+def getEMA(candles, timeperiod: int):
+    candles = candles.loc[:, 'c'].values
+    data = EMA(candles, timeperiod=timeperiod)
+    return data[-timeperiod:]
 
 
 # timespan - One of minute, 1Min, 5Min, 15Min, day or 1D.
 # timeperiod - How many candles to use
 # returns boolean if ema should be alerted
-async def alertEMA(s, symbol, timespan, timeperiod):
-    candles = await getCandles(s, timespan, symbol, timeperiod * 2)
+async def alertEMA(s, symbol: str, timespan: str, timeperiod: int):
+    timeframe = timespan
+    # Changes hour into 15M candles
+    if (timespan == 'hour'): 
+        timeframe = '15Min'
+
+    candles = await getCandles(s, timeframe, symbol, limit=(2*4 * timeperiod))
+
+    candles = aggregateCandles(candles, timespan, toDict=False)
     data = getEMA(candles, timeperiod)
-    return evalEMA(candles[-1]["c"], data[-1])
+    return evalEMA(candles["c"].iloc[-1], data[-1])
 
 
 # Evaluates and sees if ema is within 2% of target price level
@@ -164,7 +177,6 @@ async def pollTickets(tickets: list, db: TicketDB, bot):
                 continue
 
             try:
-                alerted = False
                 if t["type"] == "price_level":
                     message = await handlePriceLevelTicket(t, s)
                     t["timespan"] = "day"
@@ -211,25 +223,30 @@ class TestAPICalls(unittest.IsolatedAsyncioTestCase):
         self.session = aiohttp.ClientSession()
         self.symbol = "AAPL"
 
-    async def test_get_candles(self):
-        candles = await getCandles(self.session, "minute", self.symbol)
-        print({"candles": candles[-1]})
+    # async def test_get_candles(self):
+    #     candles = await getCandles(self.session, "minute", self.symbol)
+    #     print({"candles": candles[-1]})
 
-    # Tests if EMA is good for 50 minute candles
-    async def test_getEMA(self):
-        candles = await getCandles(self.session, "minute", self.symbol, 100)
-        ema = await getEMA(candles, 50)
-        print({"ema_length": len(ema)})
-        print({"ema": ema[-1]})
+    # # Tests if EMA is good for 50 minute candles
+    # async def test_getEMA(self):
+    #     candles = await getCandles(self.session, "minute", self.symbol, 100)
+    #     ema = await getEMA(candles, 50)
+    #     print({"ema_length": len(ema)})
+    #     print({"ema": ema[-1]})
 
-    async def test_get_price(self):
-        price = await getPriceOfTicker("AAPL", self.session)
-        print({"price": price})
+    async def test_alertEMA(self):
+        timeperiod = 50
+        ema = await alertEMA(self.session, self.symbol, "hour", 50)
+        print({'emaAlert': ema})
 
-    async def test_aggregate(self):
-        candles = await getCandles(self.session, "15Min", self.symbol, 40)
-        hourCandles = aggregateCandles(candles, "hour", 1)
-        self.assertEqual(hourCandles[2]['t'] - hourCandles[1]['t'], 3600)
+    # async def test_get_price(self):
+    #     price = await getPriceOfTicker("AAPL", self.session)
+    #     print({"price": price})
+
+    # async def test_aggregate(self):
+    #     candles = await getCandles(self.session, "15Min", self.symbol, 40)
+    #     hourCandles = aggregateCandles(candles, "hour", 1)
+    #     self.assertEqual(hourCandles[2]['t'] - hourCandles[1]['t'], 3600)
 
     async def asyncTearDown(self):
         await self.session.close()
