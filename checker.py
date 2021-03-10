@@ -21,16 +21,18 @@ Functions related to simply alerting price of a ticker
 # Returns latest ask and bid of a stock
 async def getPriceOfTicker(symbol, s):
     resp = await s.get(
-        f"https://data.alpaca.markets/v1/last_quote/stocks/{symbol}", headers=headers
+        f"https://data.alpaca.markets/v1/last/stocks/{symbol}", headers=headers
     )
     data = await resp.json()
-    return {"ask": data["last"]["askprice"], "bid": data["last"]["bidprice"]}
+    ask = data["last"]["price"]
+    bid = data["last"]["price"]
+    return {"ask": ask, "bid": bid}
 
 
 # Returns boolean of if the current price is within target price bounds
 def evalPriceSignal(currentPrice: float, targetPrice: float, margin: float):
-    return (targetPrice + margin > currentPrice) and (
-        targetPrice - margin < currentPrice
+    return (targetPrice + margin >= currentPrice) and (
+        targetPrice - margin <= currentPrice
     )
 
 
@@ -129,20 +131,29 @@ def getEMA(candles, timeperiod: int):
 
 
 # timespan - One of minute, 1Min, 5Min, 15Min, day or 1D.
-# timeperiod - How many candles to use
+# multiplier - number of timespans
+# period - How many candles to use
 # returns boolean if ema should be alerted
-async def alertEMA(s, symbol: str, timespan: str, timeperiod: int):
+async def alertEMA(s, symbol: str, timespan: str, multiplier: int, period: int):
     timeframe = timespan
     # Changes hour into 15M candles
     if (timespan == 'hour'): 
         timeframe = '15Min'
 
-    candles = await getCandles(s, timeframe, symbol, limit=(2*4 * timeperiod))
+    candles = await getCandles(s, timeframe, symbol, limit=(2*4 * period))
 
-    candles = aggregateCandles(candles, timespan, toDict=False)
-    data = getEMA(candles, timeperiod)
+    candles = aggregateCandles(candles, timespan, multiplier, toDict=False)
+    data = getEMA(candles, period)
     return evalEMA(candles["c"].iloc[-1], data[-1])
 
+# Alerts EMA type tickets
+# Returns boolean value of if the ticket went off or not
+async def handleEmaTicket(t, s):
+    emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["multiplier"], t["period"])
+    if emaAlert:
+        message = f"{t['symbol']} hit EMA {t['multiplier']} level on the {t['timespan']} candle. <@{t['authorID']}\n"
+        return message
+    return False
 
 # Evaluates and sees if ema is within 2% of target price level
 def evalEMA(currentPrice: float, ema: float):
@@ -154,17 +165,7 @@ async def handlePriceLevelTicket(t, s):
     current = await getPriceOfTicker(t["symbol"], s)
     alertPrice = evalPriceSignal(current["ask"], t["price"], t["margin"])
     if alertPrice:
-        message = f"{t['symbol']} hit signal of {t['price']} around {t['margin']}. Currently trading for {current['ask']}. <@{t['author']}>"
-        return message
-    return False
-
-
-# Alerts EMA type tickets
-# Returns boolean value of if the ticket went off or not
-async def handleEmaTicket(t, s):
-    emaAlert = await alertEMA(s, t["symbol"], t["timespan"], t["timeperiod"])
-    if emaAlert:
-        message = f"{t['symbol']} hit EMA {t['time_period']} level on the {t['timespan']} candle. <@{t['author']}\n"
+        message = f"{t['symbol']} hit signal of {t['price']} around {t['margin']}. Currently trading for {current['ask']}. <@{t['authorID']}>"
         return message
     return False
 
@@ -186,7 +187,7 @@ async def pollTickets(tickets: list, db: TicketDB, bot):
                 if message:
                     timeout = int(time.time()) + convertLimit(t["timespan"], 3) * 60
                     db.timeoutTicket(t["id"], timeout)
-                    channel = await bot.get_channel(t["channelID"])
+                    channel = bot.get_channel(t["channelID"])
                     await channel.send(message)
                 else:
                     timeout = int(time.time()) + convertLimit(t["timespan"], 1) * 60
@@ -195,9 +196,9 @@ async def pollTickets(tickets: list, db: TicketDB, bot):
             except Exception as e:
                 print(f"Errored on {t}")
                 print(e)
-                channel = await bot.get_channel(t['channelID'])
-                await channel.send(f"Error occurred with {t}")
                 db.deleteTicket(t["id"])
+                channel = bot.get_channel(t["channelID"])
+                await channel.send(f"Error occurred with {t}")
 
 
 class TestSignalEval(unittest.TestCase):
@@ -236,7 +237,7 @@ class TestAPICalls(unittest.IsolatedAsyncioTestCase):
 
     async def test_alertEMA(self):
         timeperiod = 50
-        ema = await alertEMA(self.session, self.symbol, "hour", 50)
+        ema = await alertEMA(self.session, self.symbol, "hour", 1, timeperiod)
         print({'emaAlert': ema})
 
     # async def test_get_price(self):

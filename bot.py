@@ -60,6 +60,13 @@ class Commands(commands.Cog):
         self.monitorTickets.start()
         self.bot = bot
 
+    @commands.command()
+    async def echo(self, ctx):
+        authorID = ctx.author.id
+        channelID = ctx.channel.id
+        channel = self.bot.get_channel(616474868254244915)
+        await channel.send(f"Hi <@{authorID}>")
+
     @commands.command(name="tickets")
     async def getTickets(self, ctx, category: str):
         """
@@ -68,7 +75,7 @@ class Commands(commands.Cog):
         """
         tickets = self.db.getAllTickets(category)
 
-        if tickets == None:
+        if (tickets == None or len(tickets) < 1):
             await ctx.send(f"No tickets have been made in {category}")
             return
 
@@ -96,20 +103,20 @@ class Commands(commands.Cog):
             await ctx.send("Margin can not be below 0")
             return
 
-        _id = self.db.insertTicket(
+        _id = self.db.insertPriceTicket(
             {
                 "type": "price_level",
                 "symbol": symbol.upper(),
                 "price": price,
                 "margin": margin,
                 "channelID": ctx.channel.id,
-                "author": ctx.author.id
+                "authorID": ctx.author.id
             }
         )
         await ctx.send(f"Successfully added {symbol}@{price} {margin}, id {_id} <@{ctx.author.id}>")
 
     @commands.command(name="ema")
-    async def ema(self, ctx, symbol: str, timespan: str, multiplier=1):
+    async def ema(self, ctx, symbol: str, timespan: str, period: int, multiplier=1):
         """
         Adds an EMA watcher to tickets
         symbol should be capitalized stock ticker
@@ -129,11 +136,16 @@ class Commands(commands.Cog):
             "symbol": symbol.upper(),
             "timespan": timespan,
             "multiplier": multiplier,
+            "period": period,
             "channelID": ctx.channel.id,
-            "author": ctx.author.id
+            "authorID": ctx.author.id
         }
-        self.db.insertTicket(ticket)
+        self.db.insertEMATicket(ticket)
         await ctx.send(f"Successfully added EMA signal to tickets <@{ctx.author.id}>")
+
+    @ema.error
+    async def handleEMAError(self, ctx, error):
+        await ctx.send(error)
 
     @commands.command(name="delete")
     async def delete(self, ctx, _id: str):
@@ -153,6 +165,7 @@ class Commands(commands.Cog):
 
     @tasks.loop(seconds=0.5)
     async def monitorTickets(self):
+        await self.bot.wait_until_ready()
         now = datetime.utcnow().time()
         start = time(14, 0)
         end = time(21, 0)

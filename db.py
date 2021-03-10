@@ -22,8 +22,8 @@ class TicketDB:
                         id TEXT, 
                         timestamp INTEGER, 
                         timeout INTEGER,
-                        channelID TEXT,
-                        author TEXT
+                        channelID INTEGER,
+                        author INTEGER
                     )
                 """
             )
@@ -32,12 +32,13 @@ class TicketDB:
                     ema (
                         symbol TEXT, 
                         timespan TEXT, 
-                        multiplier INTEGER, 
+                        multiplier INTEGER,
+                        period INTEGER,
                         id TEXT, 
                         timestamp INTEGER,
                         timeout INTEGER,
-                        channelID TEXT,
-                        author TEXT
+                        channelID INTEGER,
+                        author INTEGER
                     )
                 """
             )
@@ -88,27 +89,57 @@ class TicketDB:
         if ticketType == "ema":
             return adapter.emaAdapter(doc)
 
-    def insertTicket(self, ticket: dict):
-        """
-        ticket - the alert to add to database
-        Returns alert with ID
-        """
+    def insertPriceTicket(self, ticket: dict):
         ticket["id"] = ticket["type"] + "-" + str(uuid4())[:8]
         ticket["timestamp"] = int(time.time())
         c = self.conn.cursor()
-        value = tuple(ticket.values())[1:]
         c.execute(
             """
-            INSERT INTO table 
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-            """.replace(
-                "table", ticket["type"]
-            ),
-            value,
+            INSERT INTO 
+                price_level
+            VALUES
+                (?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            (
+                ticket["symbol"], 
+                ticket["price"], 
+                ticket["margin"], 
+                ticket["id"], 
+                ticket["timestamp"],
+                ticket["channelID"],
+                ticket["authorID"]
+            )
         )
         c.close()
         self.conn.commit()
         return ticket["id"]
+
+    def insertEMATicket(self, ticket: dict):
+        ticket["id"] = ticket["type"] + "-" + str(uuid4())[:8]
+        ticket["timestamp"] = int(time.time())
+        c = self.conn.cursor()
+        c.execute(
+            """
+            INSERT INTO 
+                ema
+            VALUES
+                (?, ?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            (
+                ticket["symbol"], 
+                ticket["timespan"], 
+                ticket["multiplier"],
+                ticket["period"],
+                ticket["id"], 
+                ticket["timestamp"],
+                ticket["channelID"],
+                ticket["authorID"]
+            )
+        )
+        c.close()
+        self.conn.commit()
+        return ticket["id"]
+
 
     def timeoutTicket(self, _id: str, timeout: int):
         c = self.conn.cursor()
@@ -207,7 +238,7 @@ class Tests(unittest.TestCase):
     def test_crudOperations(self):
         ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
         # Create and Read
-        _id = self.db.insertTicket(ticket)
+        _id = self.db.insertEMATicket(ticket)
         check = self.db.getTicket(_id)
         self.assertEqual(ticket["type"], check["type"])
 
@@ -224,7 +255,7 @@ class Tests(unittest.TestCase):
         Delete inserted alert with ID
         """
         ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
-        _id = self.db.insertTicket(ticket)
+        _id = self.db.insertPriceTicket(ticket)
         success = self.db.deleteTicket(_id)
         self.assertEqual(success, True)
         pass
@@ -236,9 +267,9 @@ class Tests(unittest.TestCase):
         """
         ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
         for i in range(10):
-            self.db.insertTicket(ticket)
+            self.db.insertPriceTicket(ticket)
         ticket["symbol"] = "ABC"
-        self.db.insertTicket(ticket)
+        self.db.insertEMATicket(ticket)
 
         tickets = self.db.getTickets("price_level", 0, 5)
         self.assertEqual(len(tickets), 5)
