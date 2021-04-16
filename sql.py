@@ -293,8 +293,6 @@ class SQL(DB):
 
         c.close()
         self.conn.commit()
-
-
     
 class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

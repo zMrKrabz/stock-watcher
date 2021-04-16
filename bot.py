@@ -65,6 +65,9 @@ class Commands(commands.Cog):
 
     @commands.group(invoke_without_command=True)
     async def add(self, ctx: commands.Context):
+        """
+        Categories: price, ema
+        """
         await ctx.send("Please specify a category: price, ema")
 
     @add.command(name="price")
