@@ -1,283 +1,79 @@
-import sqlite3
-import unittest
 from uuid import uuid4
 import time
 import adapter
+from ema import EMA
+from price import Price
+from api import API
+from abc import ABC
+from typing import Callable, Awaitable, List
+from ticket import Ticket
 
-
-class TicketDB:
-    conn = None
-
-    def __init__(self, path):
-        if TicketDB.conn is None:
-            self.conn = sqlite3.connect(path)
-            c = self.conn.cursor()
-            c.execute(
-                """
-                CREATE TABLE IF NOT EXISTS 
-                    price_level (
-                        symbol TEXT, 
-                        price FLOAT, 
-                        margin FLOAT, 
-                        id TEXT, 
-                        timestamp INTEGER, 
-                        timeout INTEGER,
-                        channelID INTEGER,
-                        author INTEGER
-                    )
-                """
-            )
-            c.execute(
-                """CREATE TABLE IF NOT EXISTS 
-                    ema (
-                        symbol TEXT, 
-                        timespan TEXT, 
-                        multiplier INTEGER,
-                        period INTEGER,
-                        id TEXT, 
-                        timestamp INTEGER,
-                        timeout INTEGER,
-                        channelID INTEGER,
-                        author INTEGER
-                    )
-                """
-            )
-            c.close()
-
-    def getTables(self):
-        c = self.conn.cursor()
-        rows = c.execute(
-            """
-        SELECT
-            name
-        FROM
-            sqlite_master
-        WHERE
-            type ='table' AND
-            name NOT LIKE 'sqlite_%';
+# Repository pattern
+class DB(ABC):
+    # @abstractmethod
+    def add_price(self, symbol: str, price: float, channelID: int, author: int, margin=0.01) -> str:
         """
-        )
-        tables = [d[0] for d in rows]
-        c.close()
-        return tables
+        symbol - stock symbol
+        price
+        channelID - discord channel ID to send alert to
+        author - discordID of who created the command
+        margin - how far away the current and target price can be
 
-    def getTicket(self, _id: str):
+        returns ticketID
+        Adds price ticket to database
         """
-        id - ticket id
-        Returns ticket that was found matching ID
+        return
+
+    # @abstractmethod
+    def add_ema(self, symbol: str, timeframe: str, periods: int, channelID: int, author: int, multiplier=1, margin=0.001) -> str:
         """
-        c = self.conn.cursor()
-        ticketType = _id.split("-")[0]
+        symbol - stock symbol
+        timeframe - which candle to use: minute, hour, day, week, month
+        periods - how many candles to use to calculate ema
+        channelID - discord channel ID to send alert to
+        author - discordID of who created the command
+        multiplier - how many timeframes to use, ex: 4 as multiplier and hour as timeframe would result in 4H candles used
+        margin - how far away the current ema and current price can be
 
-        tables = self.getTables()
-        if ticketType not in tables:
-            return None
-
-        rows = c.execute(
-            "SELECT * FROM table WHERE id=?".replace("table", ticketType),
-            (_id,),
-        )
-        doc = rows.fetchone()
-
-        c.close()
-        if doc == None:
-            return None
-
-        if ticketType == "price_level":
-            return adapter.priceLevelAdapter(doc)
-
-        if ticketType == "ema":
-            return adapter.emaAdapter(doc)
-
-    def insertPriceTicket(self, ticket: dict):
-        ticket["id"] = ticket["type"] + "-" + str(uuid4())[:8]
-        ticket["timestamp"] = int(time.time())
-        c = self.conn.cursor()
-        c.execute(
-            """
-            INSERT INTO 
-                price_level
-            VALUES
-                (?, ?, ?, ?, ?, 0, ?, ?)
-            """,
-            (
-                ticket["symbol"], 
-                ticket["price"], 
-                ticket["margin"], 
-                ticket["id"], 
-                ticket["timestamp"],
-                ticket["channelID"],
-                ticket["authorID"]
-            )
-        )
-        c.close()
-        self.conn.commit()
-        return ticket["id"]
-
-    def insertEMATicket(self, ticket: dict):
-        ticket["id"] = ticket["type"] + "-" + str(uuid4())[:8]
-        ticket["timestamp"] = int(time.time())
-        c = self.conn.cursor()
-        c.execute(
-            """
-            INSERT INTO 
-                ema
-            VALUES
-                (?, ?, ?, ?, ?, ?, 0, ?, ?)
-            """,
-            (
-                ticket["symbol"], 
-                ticket["timespan"], 
-                ticket["multiplier"],
-                ticket["period"],
-                ticket["id"], 
-                ticket["timestamp"],
-                ticket["channelID"],
-                ticket["authorID"]
-            )
-        )
-        c.close()
-        self.conn.commit()
-        return ticket["id"]
-
-
-    def timeoutTicket(self, _id: str, timeout: int):
-        c = self.conn.cursor()
-        ticketType = _id.split("-")[0]
-        c.execute(
-            """
-        UPDATE 
-            table
-        SET 
-            timeout=?
-        WHERE
-            id=? 
-        """.replace(
-                "table", ticketType
-            ),
-            (timeout, _id),
-        )
-        self.conn.commit()
-
-    def deleteTicket(self, _id: str):
+        returns ticketID
+        Adds EMA ticket to 
         """
-        Returns None if the id could not be identified, or True if delete was successful
+        return
+
+    # @abstractmethod
+    def delete(self, id: str) ->bool:
         """
-        c = self.conn.cursor()
-        ticketType = _id.split("-")[0]
-        tables = self.getTables()
+        id - tickets ID
 
-        if ticketType not in tables:
-            return None
-
-        c.execute("DELETE FROM table WHERE id=?".replace("table", ticketType), (_id,))
-        c.close()
-        self.conn.commit()
-        return True
-
-    def getTickets(self, category, idx=0, count=10):
+        returns whether the delete was successful or not
+        Deletes ticket from database
         """
-        Gets all tickets from specified category (ema, price_level) by specific index and count
+        return
+
+    # @abstractmethod
+    def get_all(self) -> List[Ticket]:
         """
-        c = self.conn.cursor()
-        tables = self.getTables()
 
-        if category not in tables:
-            return None
-
-        rows = c.execute(
-            """
-        SELECT *
-        FROM 
-            table
-        ORDER BY 
-            timestamp
-        LIMIT ?
-        OFFSET ?
-        """.replace(
-                "table", category
-            ),
-            (count, idx),
-        )
-
-        if category == "price_level":
-            return [adapter.priceLevelAdapter(d) for d in rows]
-
-        if category == "ema":
-            return [adapter.emaAdapter(d) for d in rows]
-
-    def getAllTickets(self, category):
+        returns all tickets from database as Ticket objects
         """
-        Gets all tickets from a category
+        return
+
+    # @abstractmethod
+    def get_all_ema(self) -> List[EMA]:
         """
-        c = self.conn.cursor()
-        tables = self.getTables()
-
-        if category not in tables:
-            return None
-
-        rows = c.execute(
-            """
-        SELECT *
-        FROM table
-        """.replace(
-                "table", category
-            )
-        )
-        if category == "price_level":
-            return [adapter.priceLevelAdapter(d) for d in rows]
-
-        if category == "ema":
-            return [adapter.emaAdapter(d) for d in rows]
-
-
-class Tests(unittest.TestCase):
-    def setUp(self):
-        self.db = TicketDB("alerts.db")
-
-    def test_crudOperations(self):
-        ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
-        # Create and Read
-        _id = self.db.insertEMATicket(ticket)
-        check = self.db.getTicket(_id)
-        self.assertEqual(ticket["type"], check["type"])
-
-        # Delete
-        success = self.db.deleteTicket(_id)
-        self.assertEqual(success, True)
-
-    def test_fetchBadTicketType(self):
-        t = self.db.getTicket("; DROP TABLES-abcde")
-        self.assertIsNone(t)
-
-    def test_deleteAlert(self):
+        returns all EMA tickets from database
         """
-        Delete inserted alert with ID
+        return
+
+    def get_all_price(self) -> List[Price]:
         """
-        ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
-        _id = self.db.insertPriceTicket(ticket)
-        success = self.db.deleteTicket(_id)
-        self.assertEqual(success, True)
-        pass
-
-    def test_getMultipleAlerts(self):
+        returns all price tickets
         """
-        Gets alerts based on count and starting index, with default of 0
-        Tests for pagniation
+        return
+
+    def update_timeout(self, _id: str, timeout: int) -> None:
         """
-        ticket = {"type": "price_level", "symbol": "TESTI", "price": 100, "margin": 10}
-        for i in range(10):
-            self.db.insertPriceTicket(ticket)
-        ticket["symbol"] = "ABC"
-        self.db.insertEMATicket(ticket)
-
-        tickets = self.db.getTickets("price_level", 0, 5)
-        self.assertEqual(len(tickets), 5)
-
-    def tearDown(self):
-        self.db.conn.execute("DELETE FROM price_level")
-        self.db.conn.commit()
-
-
-if __name__ == "__main__":
-    unittest.main()
+        updates timeout of specific ticket
+        """
+        return
+        

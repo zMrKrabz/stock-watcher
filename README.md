@@ -1,15 +1,48 @@
 # Python Bot to alert discord when specific levels have hit
 
 # Getting Started
-
-Make sure the machine has [TA-Lib](https://stackoverflow.com/questions/45406213/unable-to-install-ta-lib-on-ubuntu) installed. The bot uses this package in order to calculate EMA, RSA, etc. Also, make sure you have a [Polygon](https://polygon.io/) API Key, that's what the bot uses for market data.
+Make sure you have an [Alpaca](https://alpaca.markets/) API Key, that is how ths bot gathers data. THe bot is ran and tested on Python 3.8. To upgrade, please take a look at [this](https://tech.serhatteker.com/post/2020-09/how-to-install-python39-on-ubuntu/) guide.
 
 ## Setting environment variables
 
 These variables MUST be set prior to running the bot
 
--   **CLIENT_SECRET** is the Discord Bot token
--   **APCA_API_KEY_ID** is the Polygon API key you are using
--   **WEBHOOK_URL** is where you would send the alerts to
+-   **CLIENT_SECRET** Discord Bot token
+-   **APCA_API_KEY_ID** Alpaca client key
+- 	**APCA_API_PRIVATE_KEY** Alpaca private key 
 
 After setting all that, run `python3 bot.py` to start running the bot.
+
+### How to install TA-Lib on Ubuntu 20
+`$ curl -L http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz --output ta-lib-0.4.0-src.tar.gz`
+
+`$ tar -xvf ta-lib-0.4.0-src.tar.gz`
+
+`$ cd ta-lib/`
+
+`$ sudo apt install build-essential`
+
+`$ ./configure --prefix=/usr`
+
+`$ make`
+
+`$ sudo make install`
+
+`$ sudo apt upgrade`
+
+## Run the bot
+Tested on Ubuntu 20.04 Google Cloud Server.
+
+If you do not have pip installed, run
+
+`$ sudo apt install python3-pip`
+
+then,
+
+`$ pip3 install -r requirements.txt`
+
+`$ source init.sh`
+
+^ Note: This is the shell script with your env variables
+
+`$ python3 bot.py`

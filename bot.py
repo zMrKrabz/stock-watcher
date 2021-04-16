@@ -5,30 +5,11 @@ import os
 import discord
 from discord.ext import tasks, commands
 from discord.ext import menus
-from checker import pollTickets
-from db import TicketDB
-from datetime import datetime, time
-
-"""
-Base ticket
-channelID: str - Will send ticket to this channel
-author: str - Will @ this person in chat when ticket hits
-type: str - Currently supports price_level, ema. Future supports RSI
-symbol: str - The ticker to watch
-id: str - Unique identifier for ticket
-"""
-
-"""
-Price level ticket
-price: float - Price that the person expects to hit
-margin: float - the dollar amount around the price
-"""
-
-"""
-EMA ticket
-timespan: str - minute, hour, day
-multiplier: int - how many timespans
-"""
+import time
+from typing import List
+from sql import SQL
+from db import Ticket
+from api import API
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
@@ -37,148 +18,128 @@ class TicketsMenu(menus.ListPageSource):
         """
         super().__init__(tickets, per_page=10)
 
-    async def format_page(self, menu, entries):
+    async def format_page(self, menu, entries: List[Ticket]):
         data = []
         for t in entries:
-            if t["type"] == "price_level":
-                data.append(
-                    f"Watching {t['symbol']} @{t['price']} around {t['margin']}. ID: {t['id']}"
-                )
-            elif t["type"] == "ema":
-                data.append(
-                    f"Watching {t['symbol']} to touch ema at {t['timespan']} candle with {t['multiplier']} multiplier. ID: {t['id']}"
-                )
+            data.append(str(t))
+
         message = "\n".join(d for d in data)
         return message
-
 
 class Commands(commands.Cog):
     """Basic commands for the bot"""
 
     def __init__(self, bot):
-        self.db = TicketDB("alerts.db")
-        self.monitorTickets.start()
         self.bot = bot
+        self.db = SQL('alerts.db')
+        self.api = API()
+        self.monitor.start()
 
-    @commands.command()
-    async def echo(self, ctx):
-        authorID = ctx.author.id
-        channelID = ctx.channel.id
-        channel = self.bot.get_channel(616474868254244915)
-        await channel.send(f"Hi <@{authorID}>")
-
-    @commands.command(name="tickets")
-    async def getTickets(self, ctx, category: str):
+    @commands.command(name="get")
+    async def get(self, ctx, symbol="*", category="*"):
         """
-        Replies with all the tickets that are currently being monitored
-        category - price_level or ema, depending on the tickets u want to see
+        symbol - optional, only get tickets of specific stock
+        category - optional, only get specific category, such as EMA or Price
+        returns all tickets based on parameters
         """
-        tickets = self.db.getAllTickets(category)
 
-        if (tickets == None or len(tickets) < 1):
-            await ctx.send(f"No tickets have been made in {category}")
+        tickets = []
+        if (category == '*'):
+            tickets += self.db.get_all_ema(ctx.author.id, symbol=symbol)
+            tickets += self.db.get_all_price(ctx.author.id, symbol=symbol)
+        elif (category == 'ema'):
+            tickets += self.db.get_all_ema(ctx.author.id, symbol=symbol)
+        elif (category == 'price'):
+            tickets += self.db.get_all_price(ctx.author.id, symbol=symbol)
+
+        if (len(tickets) < 0):
+            await ctx.send(f"You have not entered any tickets <@{ctx.author.id}>")
             return
 
         pages = menus.MenuPages(source=TicketsMenu(tickets), clear_reactions_after=True)
         await pages.start(ctx)
 
-    @getTickets.error
-    async def getTicketsError(self, ctx, error):
+    @get.error
+    async def get_error(self, ctx, error):
         await ctx.send(error)
 
-    @commands.command(name="price")
-    async def price(self, ctx, symbol: str, price: float, margin: float):
+    @commands.group(invoke_without_command=True)
+    async def add(self, ctx: commands.Context):
+        await ctx.send("Please specify a category: price, ema")
+
+    @add.command(name="price")
+    async def price(self, ctx: commands.Context, symbol: str, price: float, margin=1.0):
         """
-        Add a price level ticket to monitor
-        symbol - capitalized stock ticker
-        price - the price in float (ex. 60.1)
-        margin - float $ if target bounds. Ex. If input is 0.05, it will alert when stock is around .05 dollars of the target
+        symbol - stock symbol
+        price - price to watch for
+        margin - dollar amount to for current and target price to differ by, optional
+
+        Adds price ticket to database
         """
-
-        if price < 0:
-            await ctx.send("Price can not be below 0")
-            return
-
-        if margin < 0:
-            await ctx.send("Margin can not be below 0")
-            return
-
-        _id = self.db.insertPriceTicket(
-            {
-                "type": "price_level",
-                "symbol": symbol.upper(),
-                "price": price,
-                "margin": margin,
-                "channelID": ctx.channel.id,
-                "authorID": ctx.author.id
-            }
+        _id = self.db.add_price(
+            symbol=symbol,
+            price=price,
+            channelID=ctx.channel.id,
+            author=ctx.author.id,
+            margin=margin
         )
-        await ctx.send(f"Successfully added {symbol}@{price} {margin}, id {_id} <@{ctx.author.id}>")
+        await ctx.send(f"Added price ticket (ID: {_id})")
 
-    @commands.command(name="ema")
-    async def ema(self, ctx, symbol: str, timespan: str, period: int, multiplier=1):
+    @price.error
+    async def add_price_error(self, ctx: commands.Context, error):
+        await ctx.send(error)
+
+    @add.command(name="ema")
+    async def ema(self, ctx: commands.Context, symbol: str, timeframe: str, periods: str, multiplier=1, margin=0.001):
         """
-        Adds an EMA watcher to tickets
-        symbol should be capitalized stock ticker
-        timespan - minute | hour | day 
-        multiplier: int - how many timespans
+        symbol - Ticker you want to put 
+        timeframe - which candle to use: minute, hour, day, week, month
+        periods - how many candles to use to calculate ema (8,21,50,200)
+        multiplier - how many timeframes to use, ex: 4 as multiplier and hour as timeframe would result in 4H candles used
+        margin - the % amount the EMA value and current price should differ by
+
+        Adds ema ticket to database
         """
-
-        intervalTypes = ["minute", "hour", "day"]
-        if timespan not in intervalTypes:
-            await ctx.send(
-                f"You sent {timespan} but interval must be {' '.join(intervalTypes)}"
-            )
-            return
-
-        ticket = {
-            "type": "ema",
-            "symbol": symbol.upper(),
-            "timespan": timespan,
-            "multiplier": multiplier,
-            "period": period,
-            "channelID": ctx.channel.id,
-            "authorID": ctx.author.id
-        }
-        self.db.insertEMATicket(ticket)
-        await ctx.send(f"Successfully added EMA signal to tickets <@{ctx.author.id}>")
+        _id = self.db.add_ema(
+            symbol=symbol,
+            timeframe=timeframe,
+            periods=periods,
+            channelID=ctx.channel.id,
+            author=ctx.author.id,
+            multiplier=multiplier,
+            margin=margin,
+        )
+        await ctx.send(f"Added EMA ticket (ID: {_id})")
 
     @ema.error
-    async def handleEMAError(self, ctx, error):
+    async def add_ema_error(self, ctx: commands.Context, error):
         await ctx.send(error)
 
-    @commands.command(name="delete")
-    async def delete(self, ctx, _id: str):
-        """
-        Deletes alert from database
-        Parameters:
-        _id: id of the ticket
-        """
-        success = self.db.deleteTicket(_id)
-
-        if success == None:
-            await ctx.send("Unable to delete alert with ID " + _id)
-            return
-
-        await ctx.send(f"Deleted ticket {_id}")
-        return
-
-    @tasks.loop(seconds=0.5)
-    async def monitorTickets(self):
+    @tasks.loop(seconds=5)
+    async def monitor(self):
         await self.bot.wait_until_ready()
-        now = datetime.utcnow().time()
-        start = time(14, 0)
-        end = time(21, 0)
-        if now > start and now < end:
-            tickets = self.db.getAllTickets("price_level") + self.db.getAllTickets(
-                "ema"
-            )
-            await pollTickets(tickets, self.db, self.bot)
+        tickets = []
+        tickets += self.db.get_all_ema(active=True)
+        tickets += self.db.get_all_price(active=True)
 
+        print("Monitoring", len(tickets), "tickets")
+        for t in tickets:
+            async def send(message: str):
+                channel = self.bot.get_channel(796931925146337321)
 
-clientSecret = os.environ["CLIENT_SECRET"]
+                # if channel == None:
+                #     self.db.delete(t._id)
+
+                await channel.send(f"{message} <@{t.author}>")
+                
+                timeout = time.time() + t.timeout()
+                self.db.update_timeout(t._id, timeout)
+
+            await t.monitor(self.api, send)
+
+client_secret = os.environ["CLIENT_SECRET"]
 bot = commands.Bot(command_prefix="$")
 
 bot.add_cog(Commands(bot))
 print("Started bot")
-bot.run(clientSecret)
+bot.run(client_secret)
