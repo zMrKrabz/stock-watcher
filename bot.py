@@ -128,10 +128,10 @@ class Commands(commands.Cog):
         print("Monitoring", len(tickets), "tickets")
         for t in tickets:
             async def send(message: str):
-                channel = self.bot.get_channel(796931925146337321)
+                channel = self.bot.get_channel(t.channelID)
 
-                # if channel == None:
-                #     self.db.delete(t._id)
+                if channel == None:
+                    self.db.delete(t._id)
 
                 await channel.send(f"{message} <@{t.author}>")
                 

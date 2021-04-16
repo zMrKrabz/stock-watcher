@@ -1,6 +1,5 @@
 from uuid import uuid4
 import time
-import adapter
 from ema import EMA
 from price import Price
 from api import API
