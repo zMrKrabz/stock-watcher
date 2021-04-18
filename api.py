@@ -88,7 +88,11 @@ class API:
             headers=headers
         )
         data = await resp.json()
-        return data[symbol][0]['c']
+        try:
+            return data[symbol][0]['c']
+        except Exception as e:
+            print(data)
+            raise e
 
     async def get_bars(self, symbol: str, timeframe: str, multiplier: int, limit: int) -> pd.DataFrame:
         """

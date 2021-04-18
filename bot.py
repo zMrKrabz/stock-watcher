@@ -10,6 +10,7 @@ from typing import List
 from sql import SQL
 from db import Ticket
 from api import API
+import traceback
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
@@ -133,12 +134,21 @@ class Commands(commands.Cog):
                 if channel == None:
                     self.db.delete(t._id)
 
-                await channel.send(f"{message} <@{t.author}>")
-                
-                timeout = time.time() + t.timeout()
-                self.db.update_timeout(t._id, timeout)
+                try:
+                    await channel.send(f"{message} <@{t.author}>")
+                    
+                    timeout = time.time() + t.timeout()
+                    self.db.update_timeout(t._id, timeout)
+                except Exception as e:
+                    print(e)
+                    print(f"ChannelID: {t.channelID}")
 
-            await t.monitor(self.api, send)
+
+            try:
+                await t.monitor(self.api, send)
+            except Exception:
+                print(f"Error on ticket {t._id}")
+                print(traceback.format_exc())
 
 client_secret = os.environ["CLIENT_SECRET"]
 bot = commands.Bot(command_prefix="$")
