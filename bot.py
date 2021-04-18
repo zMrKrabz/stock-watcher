@@ -160,7 +160,7 @@ class Commands(commands.Cog):
             except Exception:
                 logger.error(f"Error on ticket {t._id}", exc_info=True)
             
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
         
         end = time.perf_counter()
         logger.info(f"Took {end-start} to monitor {len(tickets)} tickets")
