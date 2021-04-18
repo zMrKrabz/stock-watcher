@@ -11,6 +11,15 @@ from sql import SQL
 from db import Ticket
 from api import API
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
+formatter = logging.Formatter('%(name)s [%(asctime)s] %(message)s', datefmt="%d-%b-%y %H:%M:%S")
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+stream_handler.setLevel("DEBUG")
+logger.addHandler(stream_handler)
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
@@ -126,7 +135,8 @@ class Commands(commands.Cog):
         tickets += self.db.get_all_ema(active=True)
         tickets += self.db.get_all_price(active=True)
 
-        print("Monitoring", len(tickets), "tickets")
+        logger.info(f"Monitoring {len(tickets)} tickets")
+        start = time.perf_counter()
         for t in tickets:
             async def send(message: str):
                 channel = self.bot.get_channel(t.channelID)
@@ -139,23 +149,23 @@ class Commands(commands.Cog):
                     
                     timeout = time.time() + t.timeout()
                     self.db.update_timeout(t._id, timeout)
-                except Exception as e:
-                    print(e)
-                    print(f"ChannelID: {t.channelID}")
-
+                except Exception:
+                    logger.error(f"ChannelID: {t.channelID}", exc_info=True)
 
             try:
                 await t.monitor(self.api, send)
             except Exception:
-                print(f"Error on ticket {t._id}")
-                print(traceback.format_exc())
+                logger.error(f"Error on ticket {t._id}", exc_info=True)
             
             await asyncio.sleep(5)
+        
+        end = time.perf_counter()
+        logger.info(f"Took {end-start} to monitor {len(tickets)} tickets")
 
 if __name__ == "__main__":
     client_secret = os.environ["CLIENT_SECRET"]
     bot = commands.Bot(command_prefix="$")
+    logger.info("Started bot")
 
     bot.add_cog(Commands(bot))
-    print("Started bot")
     bot.run(client_secret)
