@@ -13,9 +13,12 @@ from api import API
 import traceback
 import logging
 
+os.environ['TZ'] = 'utc'
+time.tzset()
+
 logger = logging.getLogger(__name__)
 logger.setLevel("DEBUG")
-formatter = logging.Formatter('%(name)s [%(asctime)s] %(message)s', datefmt="%d-%b-%y %H:%M:%S")
+formatter = logging.Formatter('%(name)s [%(asctime)s] %(message)s', datefmt="%FT%T%z")
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 stream_handler.setLevel("DEBUG")
