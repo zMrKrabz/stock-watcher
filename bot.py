@@ -9,9 +9,9 @@ import time
 from typing import List
 from sql import SQL
 from db import Ticket
-from api import API
 import traceback
 import logging
+from alpaca_v1 import Alpaca_V1
 
 os.environ['TZ'] = 'utc'
 time.tzset()
@@ -45,7 +45,7 @@ class Commands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = SQL('alerts.db')
-        self.api = API()
+        self.api = Alpaca_V1()
         self.monitor.start()
 
     @commands.command(name="get")
