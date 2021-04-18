@@ -149,10 +149,13 @@ class Commands(commands.Cog):
             except Exception:
                 print(f"Error on ticket {t._id}")
                 print(traceback.format_exc())
+            
+            await asyncio.sleep(5)
 
-client_secret = os.environ["CLIENT_SECRET"]
-bot = commands.Bot(command_prefix="$")
+if __name__ == "__main__":
+    client_secret = os.environ["CLIENT_SECRET"]
+    bot = commands.Bot(command_prefix="$")
 
-bot.add_cog(Commands(bot))
-print("Started bot")
-bot.run(client_secret)
+    bot.add_cog(Commands(bot))
+    print("Started bot")
+    bot.run(client_secret)

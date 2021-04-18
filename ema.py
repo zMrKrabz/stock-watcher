@@ -15,7 +15,7 @@ def get(candles: pd.DataFrame, periods: int):
     """
     c = candles.loc[:, 'c'].values
     ema = talib.EMA(c, periods)
-    candles['EMA'] = ema
+    candles[f"{periods}EMA"] = ema
 
 
 def candles_to_seconds(timeframe: str, multiplier: int) -> int:
@@ -55,7 +55,7 @@ class EMA(Ticket):
         self.margin = margin
 
     def __str__(self):
-        return f"{self._id} {self.symbol} to hit {self.periods}EMA on the {self.multiplier}{self.timeframe} candle"
+        return f"{self._id}: {self.symbol} to hit {self.periods}EMA on the {self.multiplier}{self.timeframe} candle"
 
     async def monitor(self, api: API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
         """
@@ -66,11 +66,12 @@ class EMA(Ticket):
         candles = await api.get_bars(self.symbol, self.timeframe, self.multiplier, limit=self.periods)
         get(candles, self.periods)
 
-        current = candles[['c', 'EMA']].tail(1)
-        price = current['c'].values[0]
-        ema = current['EMA'].values[0]
+        current = candles.tail(1)
+        high_price = current['h'].values[0]
+        low_price = current['l'].values[0]
+        ema = current[f"{self.periods}EMA"].values[0]
 
-        if (ema < price * (1 + self.margin)) and (ema < price * (1 - self.margin)):
+        if (ema < high_price * (1 + self.margin)) and (ema < low_price * (1 - self.margin)):
             await callback(str(self))
 
     def timeout(self):
