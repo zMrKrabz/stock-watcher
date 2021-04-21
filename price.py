@@ -3,6 +3,20 @@ from typing import Callable, Awaitable
 import unittest
 from time import time
 from alpaca_v1 import Alpaca_V1 as API
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
+formatter = logging.Formatter('%(name)s [%(asctime)s] %(message)s', datefmt="%FT%T%z")
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+stream_handler.setLevel("DEBUG")
+logger.addHandler(stream_handler)
+
+file_handler = logging.FileHandler("history.log")
+file_handler.setLevel("DEBUG")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 class Price(Ticket):
     """
@@ -29,7 +43,10 @@ class Price(Ticket):
         """
         current_price  = await api.get_price(self.symbol)
         if (current_price['l'] < (self.price + self.margin) and current_price['h'] > (self.price - self.margin)):
+            logger.info(f"{self.symbol} near {self.price} currently trading at {current_price['c']}")
             await callback(f"{self.symbol} near {self.price} currently trading at {current_price['c']}")
+        else:
+            logger.info(f"{self.symbol} currently trading at {current_price['c']}, watching for it to go to {self.price} within {self.margin}")
 
     def timeout(self):
         """

@@ -25,6 +25,11 @@ stream_handler.setFormatter(formatter)
 stream_handler.setLevel("DEBUG")
 logger.addHandler(stream_handler)
 
+file_handler = logging.FileHandler("history.log")
+file_handler.setLevel("DEBUG")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
         """
