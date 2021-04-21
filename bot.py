@@ -12,6 +12,7 @@ from db import Ticket
 import traceback
 import logging
 from alpaca_v1 import Alpaca_V1
+import datetime
 
 os.environ['TZ'] = 'utc'
 time.tzset()
@@ -183,7 +184,8 @@ class Commands(commands.Cog):
             await asyncio.sleep(2)
         
         end = time.perf_counter()
-        logger.info(f"Took {end-start} to monitor {len(tickets)} tickets")
+        dt = datetime.timedelta(seconds=(end-start))
+        logger.info(f"Took {str(dt)} to monitor {len(tickets)} tickets")
 
 if __name__ == "__main__":
     client_secret = os.environ["CLIENT_SECRET"]
