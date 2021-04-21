@@ -1,8 +1,8 @@
 from ticket import Ticket
-from api import API
 from typing import Callable, Awaitable
 import unittest
 from time import time
+from alpaca_v1 import Alpaca_V1 as API
 
 class Price(Ticket):
     """
@@ -28,8 +28,8 @@ class Price(Ticket):
         callback - function to call if price hit
         """
         current_price  = await api.get_price(self.symbol)
-        if (current_price < (self.price + self.margin)  and current_price > (self.price - self.margin)):
-            await callback(f"{self.symbol} near {self.price} currently trading at {current_price}")
+        if (current_price['l'] < (self.price + self.margin) and current_price['h'] > (self.price - self.margin)):
+            await callback(f"{self.symbol} near {self.price} currently trading at {current_price['c']}")
 
     def timeout(self):
         """
@@ -42,7 +42,15 @@ class Test(unittest.IsolatedAsyncioTestCase):
         self.api = API()
 
     async def test_monitor(self):
-        p = Price('AAPL', 132, 1, 2, '', 5.0)
+        p = Price('AAPL', price=132, channelID=1, author=2, _id='', margin=5.0)
+
+        async def message(m: str) -> Awaitable[None]:
+            print(m, p.channelID, p.author)
+
+        await p.monitor(self.api, message)
+
+    async def test_JPM(self):
+        p = Price('JPM', price=149.0, channelID=1, author=2, _id='', margin=.4)
 
         async def message(m: str) -> Awaitable[None]:
             print(m, p.channelID, p.author)

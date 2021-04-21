@@ -1,7 +1,7 @@
 """
 Command line interface for bot
 """
-from api import API
+from alpaca_v1 import Alpaca_V1 as API
 import ema
 from datetime import datetime
 from time import strftime

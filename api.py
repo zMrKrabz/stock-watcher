@@ -5,7 +5,7 @@ import aiohttp
 import os
 import time
 import urllib
-from typing import TypedDict, List
+from typing import TypedDict, List, Awaitable
 import functools
 import pandas as pd
 import numpy as np
@@ -67,10 +67,12 @@ class API:
     def __init__(self):
         self.session = aiohttp.ClientSession()
 
-    async def get_price(self, symbol: str, t=time.time()) -> float:
+    async def get_price(self, symbol: str, t=time.time()) -> Awaitable[Candle]:
         """
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
+
+        return o,h,l,c,v of last bar
         """
         return
 

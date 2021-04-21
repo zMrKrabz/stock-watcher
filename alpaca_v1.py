@@ -6,7 +6,7 @@ import os
 import unittest
 import time
 import urllib
-from typing import TypedDict, List
+from typing import TypedDict, List, Awaitable
 import functools
 import pandas as pd
 import numpy as np
@@ -24,37 +24,29 @@ class Alpaca_V1(api.API):
     def __init__(self):
         self.session = aiohttp.ClientSession()
 
-    async def get_price(self, symbol: str, t=time.time()) -> float:
+    async def get_price(self, symbol: str, t=time.time()) -> Awaitable[api.Candle]:
         """
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
         """
-        dt = datetime.fromtimestamp(t)
-        iso = tz.localize(dt).isoformat()
+        bars = await self.get_bars(symbol, "hour", 1, 1, t)
 
-        query = {
-            "symbols": symbol,
-            "limit": 1,
-            "start": '2008-04-27T15:59:00-04:00',
-            "end": iso
+        return {
+            "t": bars["t"].iloc[0],
+            "o": bars["o"].iloc[0],
+            "h": bars["h"].iloc[0],
+            "l": bars["l"].iloc[0],
+            "c": bars["c"].iloc[0],
+            "v": bars["v"].iloc[0]
         }
-        resp = await self.session.get(
-            'https://data.alpaca.markets/v1/bars/minute?' + urllib.parse.urlencode(query),
-            headers=headers
-        )
-        data = await resp.json()
-        try:
-            return data[symbol][0]['c']
-        except Exception as e:
-            print(data)
-            raise e
 
-    async def get_bars(self, symbol: str, timeframe: str, multiplier: int, limit: int) -> pd.DataFrame:
+    async def get_bars(self, symbol: str, timeframe: str, multiplier: int, limit: int, t=time.time()) -> pd.DataFrame:
         """
         symbol - Symbol of stock to get bars for
         timeframe - type of candle to get, minute, hour, day, week, month
         multiplier - how many timeframes per candle
         limit - number of candles to get
+        now - UNIX timestamp of when to end, default is the current timestamp
         Gets last {limit} bars, for example, getBars('AAPL', 'minute', 4, 3000) gets the last 3000 available 4 minute bars
         """
         tf = '' # Timeframe to contact api with
@@ -78,7 +70,7 @@ class Alpaca_V1(api.API):
         
         required = limit * num * multiplier
         candles = []
-        dt = datetime.fromtimestamp(time.time())
+        dt = datetime.fromtimestamp(t)
         end = tz.localize(dt).isoformat()
 
         while len(candles) < required:
@@ -109,39 +101,42 @@ class TestAPICalls(unittest.IsolatedAsyncioTestCase):
         self.API = Alpaca_V1()
 
     async def test_get_price_in_market_hours(self):
-        price = await self.API.get_price('AAPL', 1618347540)
-        self.assertEqual(price, 134.425)
+        # The timestamp is for Tuesday, April 20, 2021 11:00:00 AM GMT-04:00
+        # Because in order to get the complete 10am candle, need to request end at 11am
+        price = await self.API.get_price('AAPL', 1618930800)
+        print(price)
+        self.assertEqual(price['c'], 133.71)
 
-    async def test_get_bars_basic(self):
-        """
-        Gets the 10 latest 1 hours candles
-        """
-        bars = await self.API.get_bars("AAPL", "hour", 1, 10)
+    # async def test_get_bars_basic(self):
+    #     """
+    #     Gets the 10 latest 1 hours candles
+    #     """
+    #     bars = await self.API.get_bars("AAPL", "hour", 1, 10)
 
-        # returns 11 due to aggregate function counting incomplete candles as complete
-        self.assertEqual(len(bars), 11)
+    #     # returns 11 due to aggregate function counting incomplete candles as complete
+    #     self.assertEqual(len(bars), 11)
 
-    async def test_get_bars_multiplier(self):
-        """
-        Gets the 10 latest 4 hour candles
-        """
-        bars = await self.API.get_bars("AAPL", "hour", 4, 10)
-        # Bars only include hour 8am and 12am candles, 4pm is missing
+    # async def test_get_bars_multiplier(self):
+    #     """
+    #     Gets the 10 latest 4 hour candles
+    #     """
+    #     bars = await self.API.get_bars("AAPL", "hour", 4, 10)
+    #     # Bars only include hour 8am and 12am candles, 4pm is missing
 
-    async def test_get_bars_alot(self):
-        """
-        Tests if function works when querying data for the last 100
-        4 hour bars, which should poll API for 1600 bars
-        """
-        bars = await self.API.get_bars("AAPL", "hour", 4, 100)
-        print(bars)
-        pass
+    # async def test_get_bars_alot(self):
+    #     """
+    #     Tests if function works when querying data for the last 100
+    #     4 hour bars, which should poll API for 1600 bars
+    #     """
+    #     bars = await self.API.get_bars("AAPL", "hour", 4, 100)
+    #     # print(bars)
+    #     pass
 
-    async def test_get_bars_week(self):
-        """
-        Tests if the functions properly queries for weekly candles
-        """
-        pass
+    # async def test_get_bars_week(self):
+    #     """
+    #     Tests if the functions properly queries for weekly candles
+    #     """
+    #     pass
 
     async def asyncTearDown(self):
         await self.API.session.close()
