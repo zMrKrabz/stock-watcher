@@ -65,9 +65,20 @@ class Commands(commands.Cog):
         elif (category == 'price'):
             tickets += self.db.get_all_price(ctx.author.id, symbol=symbol)
 
-        if (len(tickets) < 0):
+        if (len(tickets) < 1):
             await ctx.send(f"You have not entered any tickets <@{ctx.author.id}>")
             return
+
+        len_str = f"You are currently watching {len(tickets)} "
+
+        if (symbol != "*"):
+            len_str += symbol + " "
+        
+        if (category != "*"):
+            len_str += category + " "
+
+        len_str += "tickets"
+        await ctx.send(len_str)
 
         pages = menus.MenuPages(source=TicketsMenu(tickets), clear_reactions_after=True)
         await pages.start(ctx)
@@ -129,6 +140,15 @@ class Commands(commands.Cog):
 
     @ema.error
     async def add_ema_error(self, ctx: commands.Context, error):
+        await ctx.send(error)
+
+    @commands.command(name="delete")
+    async def delete(self, ctx: commands.Context, _id: str):
+        self.db.delete(_id)
+        await ctx.send(f"Deleted id: {_id}")
+
+    @delete.error
+    async def delete_error(self, ctx: commands.Context, error):
         await ctx.send(error)
 
     @tasks.loop(seconds=5)
