@@ -1,4 +1,5 @@
-from api import API
+import api
+from alpaca_v1 import Alpaca_V1 as API
 import talib
 import unittest
 import pandas as pd
@@ -13,7 +14,7 @@ def get(candles: pd.DataFrame, periods: int):
 
     Adds EMA column to candles dataframe
     """
-    c = candles.loc[:, 'c'].values
+    c = candles['c'].iloc[:]
     ema = talib.EMA(c, periods)
     candles[f"{periods}EMA"] = ema
 
@@ -57,7 +58,7 @@ class EMA(Ticket):
     def __str__(self):
         return f"{self._id}: {self.symbol} to hit {self.periods}EMA on the {self.multiplier}{self.timeframe} candle"
 
-    async def monitor(self, api: API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
+    async def monitor(self, api: api.API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
         """
         callback - async function to call if the ticket should be alerted
 
@@ -84,18 +85,19 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.api = API()
 
-    async def test_monitor(self):
-        ticket = EMA(symbol='AAPL', timeframe='hour', periods=50, multiplier=1, channelID=123, author=456, _id=0)
+    # async def test_monitor(self):
+    #     ticket = EMA(symbol='AAPL', timeframe='hour', periods=50, multiplier=1, channelID=123, author=456, _id=0)
 
-        async def message(m: str) -> Awaitable[None]:
-            print(m, ticket.channelID, ticket.author)
+    #     async def message(m: str) -> Awaitable[None]:
+    #         print(m, ticket.channelID, ticket.author)
 
-        await ticket.monitor(self.api, message)
-        # Technically this does work because the error printed means that print isn't async
+    #     await ticket.monitor(self.api, message)
+    #     # Technically this does work because the error printed means that print isn't async
 
     async def test_get(self):
         candles = await self.api.get_bars('AAPL', timeframe='hour', multiplier=1, limit=100)
         get(candles, 50)
+        # print(candles)
 
     async def test_timeout(self):
         ticket = EMA(symbol='AAPL', timeframe='week', periods=50, multiplier=4, channelID=123, author=456, _id=0)

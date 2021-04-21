@@ -29,15 +29,19 @@ class Alpaca_V1(api.API):
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
         """
-        bars = await self.get_bars(symbol, "hour", 1, 1, t)
+        bars = await self.get_bars(symbol, 
+            timeframe="hour", 
+            multiplier=1, 
+            limit=1, 
+            t=t)
 
         return {
-            "t": bars["t"].iloc[0],
-            "o": bars["o"].iloc[0],
-            "h": bars["h"].iloc[0],
-            "l": bars["l"].iloc[0],
-            "c": bars["c"].iloc[0],
-            "v": bars["v"].iloc[0]
+            "t": bars["t"].iloc[-1],
+            "o": bars["o"].iloc[-1],
+            "h": bars["h"].iloc[-1],
+            "l": bars["l"].iloc[-1],
+            "c": bars["c"].iloc[-1],
+            "v": bars["v"].iloc[-1]
         }
 
     async def get_bars(self, symbol: str, timeframe: str, multiplier: int, limit: int, t=time.time()) -> pd.DataFrame:
@@ -102,10 +106,12 @@ class TestAPICalls(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_price_in_market_hours(self):
         # The timestamp is for Tuesday, April 20, 2021 11:00:00 AM GMT-04:00
-        # Because in order to get the complete 10am candle, need to request end at 11am
         price = await self.API.get_price('AAPL', 1618930800)
-        print(price)
-        self.assertEqual(price['c'], 133.71)
+        self.assertEqual(price['c'], 133.61)
+
+    async def test_get_price_current(self):
+        # Test random input for a stock right now, matched with TradingView
+        price = await self.API.get_price("GM")
 
     # async def test_get_bars_basic(self):
     #     """
