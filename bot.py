@@ -174,7 +174,7 @@ class Commands(commands.Cog):
                     self.db.delete(t._id)
 
                 try:
-                    await channel.send(f"{message} <@{t.author}>")
+                    await channel.send(message)
                     
                     timeout = time.time() + t.timeout()
                     self.db.update_timeout(t._id, timeout)
