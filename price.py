@@ -50,9 +50,9 @@ class Price(Ticket):
 
     def timeout(self):
         """
-        returns 2 hours from now
+        returns 24 hours from now
         """
-        return 3600 * 2 
+        return 3600 * 24
 
 class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
