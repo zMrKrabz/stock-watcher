@@ -6,6 +6,9 @@ import pandas as pd
 from typing import Callable, Awaitable
 from ticket import Ticket
 from time import time
+from custom_logger import get_logger
+
+logger = get_logger(__name__)
 
 def get(candles: pd.DataFrame, periods: int):
     """
@@ -55,7 +58,7 @@ class EMA(Ticket):
         self.periods = periods
         self.margin = margin
 
-    def __str__(self):
+    def __repr__(self):
         return f"{self._id}: {self.symbol} to hit {self.periods}EMA on the {self.multiplier}{self.timeframe} candle"
 
     async def monitor(self, api: api.API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
@@ -73,7 +76,10 @@ class EMA(Ticket):
         ema = current[f"{self.periods}EMA"].values[0]
 
         if (ema < high_price * (1 + self.margin)) and (ema < low_price * (1 - self.margin)):
+            logger.info(f"{self.symbol} @ EMA {ema}. TS: {current['t']}")
             await callback(str(self))
+        else:
+            logger.info(f"{self.symbol} EMA is {ema}. Price is {current['c']}. TS: {current['t']}")
 
     def timeout(self):
         """
@@ -85,14 +91,14 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.api = API()
 
-    # async def test_monitor(self):
-    #     ticket = EMA(symbol='AAPL', timeframe='hour', periods=50, multiplier=1, channelID=123, author=456, _id=0)
+    async def test_monitor(self):
+        ticket = EMA(symbol='AAPL', timeframe='hour', periods=50, multiplier=1, channelID=123, author=456, _id=0)
 
-    #     async def message(m: str) -> Awaitable[None]:
-    #         print(m, ticket.channelID, ticket.author)
+        async def message(m: str) -> Awaitable[None]:
+            print(m, ticket.channelID, ticket.author)
 
-    #     await ticket.monitor(self.api, message)
-    #     # Technically this does work because the error printed means that print isn't async
+        await ticket.monitor(self.api, message)
+        # Technically this does work because the error printed means that print isn't async
 
     async def test_get(self):
         candles = await self.api.get_bars('AAPL', timeframe='hour', multiplier=1, limit=100)

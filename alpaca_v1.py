@@ -30,7 +30,7 @@ class Alpaca_V1(api.API):
         t - Time to get price at, default is to get current price. In UNIX format
         """
         bars = await self.get_bars(symbol, 
-            timeframe="hour", 
+            timeframe="minute", 
             multiplier=1, 
             limit=1, 
             t=t)

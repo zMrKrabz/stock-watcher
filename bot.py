@@ -10,25 +10,14 @@ from typing import List
 from sql import SQL
 from db import Ticket
 import traceback
-import logging
+from custom_logger import get_logger
 from alpaca_v1 import Alpaca_V1
 import datetime
 
 os.environ['TZ'] = 'utc'
 time.tzset()
 
-logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
-formatter = logging.Formatter('%(name)s [%(asctime)s] %(message)s', datefmt="%FT%T%z")
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-stream_handler.setLevel("DEBUG")
-logger.addHandler(stream_handler)
-
-file_handler = logging.FileHandler("history.log")
-file_handler.setLevel("DEBUG")
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = get_logger(__name__)
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
