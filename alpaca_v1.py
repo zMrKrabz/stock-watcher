@@ -93,7 +93,7 @@ class Alpaca_V1(api.API):
             end = tz.localize(dt).isoformat()
         
         df = pd.DataFrame(candles[-required:], columns=["t", "o", "h", "l", "c", "v"])
-        df["Datetime"] = pd.to_datetime(df["t"], unit="s").dt.tz_localize('UTC').dt.tz_convert('America/New_York')
+        df["Datetime"] = pd.to_datetime(df["t"], unit="s")
 
         df = df.set_index("Datetime")
 

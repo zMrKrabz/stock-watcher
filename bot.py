@@ -160,6 +160,7 @@ class Commands(commands.Cog):
                 channel = self.bot.get_channel(t.channelID)
 
                 if channel == None:
+                    logger.error(f"Could not find channel for {t.channelID} for {t.author}")
                     self.db.delete(t._id)
 
                 try:
