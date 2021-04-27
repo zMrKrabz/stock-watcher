@@ -13,6 +13,8 @@ import traceback
 from custom_logger import get_logger
 from alpaca_v1 import Alpaca_V1
 import datetime
+import holidays
+import pytz
 
 os.environ['TZ'] = 'utc'
 time.tzset()
@@ -33,6 +35,25 @@ class TicketsMenu(menus.ListPageSource):
 
         message = "\n".join(d for d in data)
         return message
+
+tz = pytz.timezone("US/Eastern")
+def after_hours(now=datetime.datetime.now(tz)):
+    """
+    Returns true if in after hours, false if in trading hours
+    """
+    open_time = datetime.time(hour=9, minute=30)
+    close_time = datetime.time(hour=16)
+
+    if now.strftime('%Y-%m-%d') in holidays.US():
+        return True
+
+    if (now.time() < open_time or now.time() > close_time):
+        return True
+
+    if now.date().weekday() > 4:
+        return True
+
+    return False
 
 class Commands(commands.Cog):
     """Basic commands for the bot"""
@@ -149,6 +170,9 @@ class Commands(commands.Cog):
     @tasks.loop(seconds=5)
     async def monitor(self):
         await self.bot.wait_until_ready()
+        if after_hours():
+            return
+
         tickets = []
         tickets += self.db.get_all_ema(active=True)
         tickets += self.db.get_all_price(active=True)
