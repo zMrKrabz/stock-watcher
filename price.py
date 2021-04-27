@@ -22,7 +22,7 @@ class Price(Ticket):
         self.price = price
         self.margin = margin
 
-    def __repr__(self):
+    def __str__(self):
         return f"{self._id}: {self.symbol} to hit {self.price} with margin {self.margin}"
 
     async def monitor(self, api: API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:

@@ -58,7 +58,7 @@ class EMA(Ticket):
         self.periods = periods
         self.margin = margin
 
-    def __repr__(self):
+    def __str__(self):
         return f"{self._id}: {self.symbol} to hit {self.periods}EMA on the {self.multiplier}{self.timeframe} candle"
 
     async def monitor(self, api: api.API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
