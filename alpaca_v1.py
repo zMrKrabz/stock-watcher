@@ -24,7 +24,7 @@ class Alpaca_V1(api.API):
     def __init__(self):
         self.session = aiohttp.ClientSession()
 
-    async def get_price(self, symbol: str, t=time.time()) -> Awaitable[api.Candle]:
+    async def get_price(self, symbol: str, t=time.time()) -> api.Candle:
         """
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
@@ -51,6 +51,7 @@ class Alpaca_V1(api.API):
         multiplier - how many timeframes per candle
         limit - number of candles to get
         now - UNIX timestamp of when to end, default is the current timestamp
+        t - instance of time.time()
         Gets last {limit} bars, for example, getBars('AAPL', 'minute', 4, 3000) gets the last 3000 available 4 minute bars
         """
         tf = '' # Timeframe to contact api with
@@ -111,7 +112,8 @@ class TestAPICalls(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_price_current(self):
         # Test random input for a stock right now, matched with TradingView
-        price = await self.API.get_price("GM")
+        price = await self.API.get_price("TWTR")
+        print(price)
 
     # async def test_get_bars_basic(self):
     #     """

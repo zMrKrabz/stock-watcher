@@ -10,7 +10,7 @@ def get_logger(name: str):
     stream_handler.setLevel("DEBUG")
     logger.addHandler(stream_handler)
 
-    file_handler = logging.handlers.TimedRotatingFileHandler("history.log", when="midnight", interval=1)
+    file_handler = logging.handlers.TimedRotatingFileHandler("logs/history.log", when="midnight", interval=1)
     file_handler.suffix = "%Y-%m-%d"
     file_handler.setLevel("DEBUG")
     file_handler.setFormatter(formatter)

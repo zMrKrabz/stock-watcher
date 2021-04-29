@@ -5,7 +5,7 @@ import unittest
 import pandas as pd
 from typing import Callable, Awaitable
 from ticket import Ticket
-from time import time
+import time
 from custom_logger import get_logger
 
 logger = get_logger(__name__)
@@ -67,7 +67,14 @@ class EMA(Ticket):
 
         Sees if the current EMA ticket should be alerted
         """
-        candles = await api.get_bars(self.symbol, self.timeframe, self.multiplier, limit=self.periods)
+        current_time = time.time()
+        candles = await api.get_bars(
+            self.symbol,
+            self.timeframe,
+            self.multiplier,
+            limit=self.periods,
+            t=current_time
+        )
         get(candles, self.periods)
 
         current = candles.tail(1)
@@ -76,10 +83,12 @@ class EMA(Ticket):
         ema = current[f"{self.periods}EMA"].values[0]
 
         if (ema < high_price * (1 + self.margin)) and (ema < low_price * (1 - self.margin)):
-            logger.info(f"{self.symbol} @ EMA {ema}. TS: {current['t']}")
+            logger.info(f"{self.symbol} @ EMA {ema}. TS: {current.iloc[-1]['t']}. Sys: {current_time}")
             await callback(str(self))
         else:
-            logger.info(f"{self.symbol} EMA is {ema}. Price is {current['c']}. TS: {current['t']}")
+            logger.info(f"{self.symbol} EMA is {ema}. Price is {current.iloc[-1]['c']}. TS: {current.iloc[-1]['t']}. Sys: {current_time}")
+
+        return
 
     def timeout(self):
         """

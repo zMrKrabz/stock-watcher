@@ -293,7 +293,8 @@ class SQL(DB):
 
         c.close()
         self.conn.commit()
-    
+
+
 class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SQL('./test_alerts.db')
@@ -338,6 +339,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         self.db.conn.execute("DELETE FROM ema")
         self.db.conn.execute("DELETE FROM price")
         self.db.conn.commit()
+
 
 if __name__ == "__main__":
     unittest.main()

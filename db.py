@@ -75,4 +75,3 @@ class DB(ABC):
         updates timeout of specific ticket
         """
         return
-        

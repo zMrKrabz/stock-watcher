@@ -11,3 +11,4 @@ git+https://github.com/Rapptz/discord-ext-menus
 git+https://github.com/twopirllc/pandas-ta
 click
 asyncclick
+holidays

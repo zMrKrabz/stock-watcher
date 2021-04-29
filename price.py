@@ -30,12 +30,13 @@ class Price(Ticket):
         api - API to fetch data
         callback - function to call if price hit
         """
-        current_price  = await api.get_price(self.symbol)
-        if (current_price['l'] < (self.price + self.margin) and current_price['h'] > (self.price - self.margin)):
-            logger.info(f"{self.symbol} near {self.price} currently trading at {current_price['c']}")
-            await callback(f"{self.symbol} near {self.price} currently trading at {current_price['c']}. TS: {current_price['t']}")
+        current_time = time()
+        current_price  = await api.get_price(self.symbol, t=current_time)
+        if current_price['l'] < (self.price + self.margin) and current_price['h'] > (self.price - self.margin):
+            logger.info(f"{self.symbol} near {self.price} currently trading at {current_price['c']}. TS: {current_price['t']}. Sys: {current_time}")
+            await callback(f"{self.symbol} near {self.price} currently trading at {current_price['c']}. TS: {current_price['t']}. Sys: {current_time}")
         else:
-            logger.info(f"{self.symbol} currently trading at {current_price['c']}, watching for it to go to {self.price} within {self.margin}. TS: {current_price['t']}")
+            logger.info(f"{self.symbol} currently trading at {current_price['c']}, watching for it to go to {self.price} within {self.margin}. TS: {current_price['t']}. Sys: {current_time}")
 
     def timeout(self):
         """
