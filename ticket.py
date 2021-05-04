@@ -11,7 +11,11 @@ class Ticket(object):
     def __str__(self):
         return f'{self._id} {self.channelID} {self.author}'
         
-    async def monitor(self, api: API, callback: Callable[[str], Awaitable[None]]) -> Awaitable[None]:
+    async def monitor(self, api: API, callback: Callable[[str, int, int, str, int], Awaitable[None]]) -> None:
+        """
+        Monitor function. First argument is the message, second is the channelID, third is the authorID
+        async def send(message: str, channelID: int, authorID: int, _id: str, calculated_timeout: int) -> None:
+        """
         return
 
     def timeout(self) -> int:

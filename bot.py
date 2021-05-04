@@ -12,9 +12,11 @@ from db import Ticket
 import traceback
 from custom_logger import get_logger
 from alpaca_v1 import Alpaca_V1
+from tdameritrade_api import TdAmeritradeAPI
 import datetime
 import holidays
 import pytz
+from price import Price
 
 os.environ['TZ'] = 'utc'
 time.tzset()
@@ -36,7 +38,10 @@ class TicketsMenu(menus.ListPageSource):
         message = "\n".join(d for d in data)
         return message
 
+
 tz = pytz.timezone("US/Eastern")
+
+
 def after_hours(now=datetime.datetime.now(tz)):
     """
     Returns true if in after hours, false if in trading hours
@@ -47,7 +52,7 @@ def after_hours(now=datetime.datetime.now(tz)):
     if now.strftime('%Y-%m-%d') in holidays.US():
         return True
 
-    if (now.time() < open_time or now.time() > close_time):
+    if now.time() < open_time or now.time() > close_time:
         return True
 
     if now.date().weekday() > 4:
@@ -55,13 +60,14 @@ def after_hours(now=datetime.datetime.now(tz)):
 
     return False
 
+
 class Commands(commands.Cog):
     """Basic commands for the bot"""
 
     def __init__(self, bot):
         self.bot = bot
         self.db = SQL('alerts.db')
-        self.api = Alpaca_V1()
+        self.api = TdAmeritradeAPI()
         self.monitor.start()
 
     @commands.command(name="get")
@@ -73,24 +79,24 @@ class Commands(commands.Cog):
         """
 
         tickets = []
-        if (category == '*'):
+        if category == '*':
             tickets += self.db.get_all_ema(ctx.author.id, symbol=symbol)
             tickets += self.db.get_all_price(ctx.author.id, symbol=symbol)
-        elif (category == 'ema'):
+        elif category == 'ema':
             tickets += self.db.get_all_ema(ctx.author.id, symbol=symbol)
-        elif (category == 'price'):
+        elif category == 'price':
             tickets += self.db.get_all_price(ctx.author.id, symbol=symbol)
 
-        if (len(tickets) < 1):
+        if len(tickets) < 1:
             await ctx.send(f"You have not entered any tickets <@{ctx.author.id}>")
             return
 
         len_str = f"You are currently watching {len(tickets)} "
 
-        if (symbol != "*"):
+        if symbol != "*":
             len_str += symbol + " "
         
-        if (category != "*"):
+        if category != "*":
             len_str += category + " "
 
         len_str += "tickets"
@@ -146,7 +152,7 @@ class Commands(commands.Cog):
         _id = self.db.add_ema(
             symbol=symbol,
             timeframe=timeframe,
-            periods=periods,
+            periods=int(periods),
             channelID=ctx.channel.id,
             author=ctx.author.id,
             multiplier=multiplier,
@@ -170,41 +176,42 @@ class Commands(commands.Cog):
     @tasks.loop(seconds=5)
     async def monitor(self):
         await self.bot.wait_until_ready()
-        if after_hours():
-            return
+        # if after_hours():
+        #     return
 
-        tickets = []
-        tickets += self.db.get_all_ema(active=True)
-        tickets += self.db.get_all_price(active=True)
+        # tickets = []
+        # tickets += self.db.get_all_ema(active=True)
+        # tickets += self.db.get_all_price(active=True)
 
-        logger.info(f"Monitoring {len(tickets)} tickets")
+        # logger.info(f"Monitoring {len(tickets)} tickets")
         start = time.perf_counter()
-        for t in tickets:
-            async def send(message: str):
-                channel = self.bot.get_channel(t.channelID)
 
-                if channel == None:
-                    logger.error(f"Could not find channel for {t.channelID} for {t.author}")
-                    self.db.delete(t._id)
+        async def send(message: str, channelID: int, authorID: int, _id: str, calculated_timeout: int) -> None:
+            channel = self.bot.get_channel(channelID)
 
-                try:
-                    await channel.send(message)
-                    
-                    timeout = time.time() + t.timeout()
-                    self.db.update_timeout(t._id, timeout)
-                except Exception:
-                    logger.error(f"ChannelID: {t.channelID}", exc_info=True)
+            if channel == None:
+                logger.error(f"Could not find channel for {channelID} for {authorID}")
+                self.db.delete(_id)
 
             try:
-                await t.monitor(self.api, send)
+                await channel.send(message)
+
+                timeout = int(time.time()) + calculated_timeout
+                self.db.update_timeout(_id, timeout)
             except Exception:
-                logger.error(f"Error on ticket {t._id}", exc_info=True)
-            
+                logger.error(f"ChannelID: {channelID}", exc_info=True)
+
+        symbols = self.db.get_price_symbols()
+        for symbol in symbols:
+            tickets = self.db.get_prices(symbol)
+            m = Price(symbol, prices=tickets)
+            await m.monitor(self.api, send)
             await asyncio.sleep(2)
-        
+
         end = time.perf_counter()
         dt = datetime.timedelta(seconds=(end-start))
-        logger.info(f"Took {str(dt)} to monitor {len(tickets)} tickets")
+        logger.info(f"Took {str(dt)} to monitor tickets")
+
 
 if __name__ == "__main__":
     client_secret = os.environ["CLIENT_SECRET"]

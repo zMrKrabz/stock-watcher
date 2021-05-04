@@ -1,11 +1,9 @@
-from uuid import uuid4
-import time
 from ema import EMA
-from price import Price
-from api import API
+from price import Price, PriceTicket
 from abc import ABC
 from typing import Callable, Awaitable, List
 from ticket import Ticket
+
 
 # Repository pattern
 class DB(ABC):
@@ -75,3 +73,16 @@ class DB(ABC):
         updates timeout of specific ticket
         """
         return
+
+    def get_price_symbols(self) -> List[str]:
+        """
+        Returns all symbols in price category
+        """
+        return ['']
+
+    def get_prices(self, symbol: str) -> List[PriceTicket]:
+        """
+        symbol - str of ticket to get price monitors for
+        Returns all prices that are currently being monitored for that symbol
+        """
+        return []

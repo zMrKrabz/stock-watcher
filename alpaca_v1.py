@@ -14,17 +14,17 @@ import pytz
 from datetime import datetime
 import api
 
-api_key = os.environ["APCA_API_KEY_ID"]
-secret_key = os.environ["APCA_API_SECRET_KEY"]
-headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": secret_key}
-
 tz = pytz.timezone('America/New_York')
 
 class Alpaca_V1(api.API):
     def __init__(self):
         self.session = aiohttp.ClientSession()
+        api_key = os.environ["APCA_API_KEY_ID"]
+        secret_key = os.environ["APCA_API_SECRET_KEY"]
+        self.headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": secret_key}
 
-    async def get_price(self, symbol: str, t=time.time()) -> api.Candle:
+
+    async def get_price(self, symbol: str, t=time.time()) -> api.Price:
         """
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
@@ -35,14 +35,7 @@ class Alpaca_V1(api.API):
             limit=1, 
             t=t)
 
-        return {
-            "t": bars["t"].iloc[-1],
-            "o": bars["o"].iloc[-1],
-            "h": bars["h"].iloc[-1],
-            "l": bars["l"].iloc[-1],
-            "c": bars["c"].iloc[-1],
-            "v": bars["v"].iloc[-1]
-        }
+        return api.Price(t=bars['t'].iloc[-1], p=bars['c'].iloc[-1])
 
     async def get_bars(self, symbol: str, timeframe: str, multiplier: int, limit: int, t=time.time()) -> pd.DataFrame:
         """
@@ -87,7 +80,7 @@ class Alpaca_V1(api.API):
             }
             qs = urllib.parse.urlencode(query)
             url = f'https://data.alpaca.markets/v1/bars/{tf}?{qs}'
-            resp = await self.session.get(url, headers=headers)
+            resp = await self.session.get(url, headers=self.headers)
             data = await resp.json()
             candles = data[symbol] + candles
             dt = datetime.fromtimestamp(data[symbol][0]['t'])
@@ -100,6 +93,7 @@ class Alpaca_V1(api.API):
 
         sampled = api.aggregate_candles(df, timeframe, multiplier)
         return sampled
+
 
 class TestAPICalls(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

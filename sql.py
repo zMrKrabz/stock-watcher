@@ -1,8 +1,6 @@
 from db import DB
-from ticket import Ticket
-from api import API
 from ema import EMA
-from price import Price
+from price import Price, PriceTicket
 import sqlite3
 from typing import List
 from uuid import uuid4
@@ -155,7 +153,7 @@ class SQL(DB):
 
         if active == True:
             if (len(values) == 0):
-                query += "WHERE timeout = ?\n"
+                query += "WHERE timeout < ?\n"
             else:
                 query += "AND timeout < ?\n"
             values = values + (int(time.time()),)
@@ -181,7 +179,7 @@ class SQL(DB):
         c.close()
         return tickets
 
-    def get_all_price(self, authorID=0, symbol='*', active=False) -> List[Price]:
+    def get_all_price(self, authorID=0, symbol='*', active=False) -> List[PriceTicket]:
         """
         authorID -  of ticket author
         symbol - optional, only get tickets with this symbol
@@ -225,12 +223,12 @@ class SQL(DB):
             values
         )
 
-        tickets = [Price(
+        tickets = [PriceTicket(
             _id=d[0],
             symbol=d[1],
             price=d[2],
             channelID=d[6],
-            author=d[7],
+            authorID=d[7],
             margin=d[3]
         ) for d in rows]
 
@@ -294,6 +292,43 @@ class SQL(DB):
         c.close()
         self.conn.commit()
 
+    def get_price_symbols(self) -> List[str]:
+        c = self.conn.cursor()
+        rows = c.execute("""
+            SELECT DISTINCT symbol
+            FROM
+                price
+        """)
+
+        symbols = [d[0] for d in rows]
+        c.close()
+
+        return symbols
+
+    def get_prices(self, symbol: str) -> List[PriceTicket]:
+        c = self.conn.cursor()
+        rows = c.execute("""
+            SELECT price, channelID, author, id, timeout, margin
+            FROM
+                price
+            WHERE
+                symbol=?
+            AND
+                timeout < ?
+        """, (symbol, int(time.time())))
+
+        prices = [PriceTicket(
+            price=d[0],
+            channelID=d[1],
+            authorID=d[2],
+            _id=d[3],
+            timeout=d[4],
+            margin=d[5],
+            symbol=symbol,
+        ) for d in rows]
+        c.close()
+        return prices
+
 
 class Test(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -329,12 +364,22 @@ class Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_update(self):
         _id = self.db.add_price('AAPL', 134, channelID=123, author=456, margin=0.01)
-        self.db.update_timeout(_id, time.time() + 10000)
+        self.db.update_timeout(_id, int(time.time()) + 10000)
         active_tickets = self.db.get_all_price(456, active=True)
         inactive_tickets = self.db.get_all_price(456)
         self.assertGreater(len(inactive_tickets), len(active_tickets))
 
-
+    async def test_get_symbols(self):
+        db = SQL('./alerts.db')
+        symbols = db.get_price_symbols()
+        print(symbols)
+        
+    async def test_get_prices(self):
+        db = SQL('./alerts.db')
+        symbol = 'AAPL'
+        prices = db.get_prices(symbol)
+        print(prices)
+        
     async def asyncTearDown(self):
         self.db.conn.execute("DELETE FROM ema")
         self.db.conn.execute("DELETE FROM price")

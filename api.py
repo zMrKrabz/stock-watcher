@@ -22,6 +22,12 @@ class Candle(TypedDict):
     c: float
     v: int
 
+
+class Price(TypedDict):
+    t: int
+    p: float
+
+
 def convert_timeframe(timeframe: str, multiplier=1):
     # timeframe - minute, hour, day
     # multiplier - how many timeframes, ex. 4 Days
@@ -40,6 +46,7 @@ def convert_timeframe(timeframe: str, multiplier=1):
 
     if timeframe == "month":
         return str(multiplier) + "M"
+
 
 def aggregate_candles(candles: pd.DataFrame, timeframe: str, multiplier=1, toDict=False) -> pd.DataFrame:
     # candles - candles from getCandles as dataframe
@@ -63,16 +70,17 @@ def aggregate_candles(candles: pd.DataFrame, timeframe: str, multiplier=1, toDic
         return aggregated.to_dict("records")
     return aggregated
 
+
 class API:
     def __init__(self):
         self.session = aiohttp.ClientSession()
 
-    async def get_price(self, symbol: str, t=time.time()) -> Awaitable[Candle]:
+    async def get_price(self, symbol: str, t=time.time()) -> Price:
         """
         symbol - Symbol to fetch price for
         t - Time to get price at, default is to get current price. In UNIX format
 
-        return o,h,l,c,v of last bar
+        returns { t as timestamp and , price as p}
         """
         return
 
