@@ -176,8 +176,8 @@ class Commands(commands.Cog):
     @tasks.loop(seconds=5)
     async def monitor(self):
         await self.bot.wait_until_ready()
-        # if after_hours():
-        #     return
+        if after_hours():
+            return
 
         # tickets = []
         # tickets += self.db.get_all_ema(active=True)
