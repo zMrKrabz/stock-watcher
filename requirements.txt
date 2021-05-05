@@ -13,3 +13,4 @@ click
 asyncclick
 holidays
 tdameritrade
+python-dotenv

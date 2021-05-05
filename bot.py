@@ -17,11 +17,13 @@ import datetime
 import holidays
 import pytz
 from price import Price
+from dotenv import load_dotenv
 
 os.environ['TZ'] = 'utc'
 time.tzset()
 
 logger = get_logger(__name__)
+
 
 class TicketsMenu(menus.ListPageSource):
     def __init__(self, tickets):
@@ -39,13 +41,13 @@ class TicketsMenu(menus.ListPageSource):
         return message
 
 
-tz = pytz.timezone("US/Eastern")
-
-
-def after_hours(now=datetime.datetime.now(tz)):
+def after_hours():
     """
     Returns true if in after hours, false if in trading hours
     """
+    tz = pytz.timezone("US/Eastern")
+    now = datetime.datetime.now(tz)
+
     open_time = datetime.time(hour=9, minute=30)
     close_time = datetime.time(hour=16)
 
@@ -176,7 +178,8 @@ class Commands(commands.Cog):
     @tasks.loop(seconds=5)
     async def monitor(self):
         await self.bot.wait_until_ready()
-        if after_hours():
+        ah = after_hours()
+        if ah:
             return
 
         # tickets = []
@@ -213,10 +216,15 @@ class Commands(commands.Cog):
         logger.info(f"Took {str(dt)} to monitor tickets")
 
 
-if __name__ == "__main__":
+def start():
+    load_dotenv()
     client_secret = os.environ["CLIENT_SECRET"]
     bot = commands.Bot(command_prefix="$")
     logger.info("Started bot")
 
     bot.add_cog(Commands(bot))
     bot.run(client_secret)
+
+
+if __name__ == "__main__":
+    start()

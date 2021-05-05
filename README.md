@@ -8,8 +8,18 @@ Make sure you have an [Alpaca](https://alpaca.markets/) API Key, that is how ths
 These variables MUST be set prior to running the bot
 
 -   **CLIENT_SECRET** Discord Bot token
+
+
+### If using alpaca
 -   **APCA_API_KEY_ID** Alpaca client key
 - 	**APCA_API_PRIVATE_KEY** Alpaca private key 
+
+### If using TD Ameritrade
+- **TDAMERITRADE_CLIENT_ID** Consumer key from [TDApps](https://developer.tdameritrade.com/user/me/apps)
+
+- **TDAMERITRADE_ACCOUNT_ID** Can be just 1
+
+- **TDAMERITRADE_REFRESH_TOKEN** Refresh token by invoking `get_td_auth` script
 
 After setting all that, run `python3 bot.py` to start running the bot.
 

@@ -9,10 +9,14 @@ import dateutil
 import pytz
 import asyncio
 import asyncclick as click
+import bot
+from dotenv import load_dotenv
+
 
 @click.group()
 def cli():
     pass
+
 
 @click.command()
 async def save():
@@ -33,6 +37,7 @@ async def save():
     now = datetime.now().strftime("%Y-%m-%d")
     candles.to_csv(f'{symbol}_{multiplier}{timeframe}_{now}.csv')
 
+
 @click.command()
 @click.argument('t')
 def utctoest(t: str):
@@ -43,7 +48,17 @@ def utctoest(t: str):
     dt = dateutil.parser.parse(t)
     converted = dt.astimezone(tz)
     print(converted.isoformat())
-    
+
+
+@click.command()
+def start_bot():
+    """
+    Starts the discord bot
+    """
+    # load_dotenv()
+    bot.start()
+
+
 @click.command()
 @click.argument('t')
 def tstoest(t: int):
@@ -53,10 +68,12 @@ def tstoest(t: int):
     tz = pytz.timezone('America/New_York')
     dt = datetime.fromtimestamp(int(t))
     print(tz.localize(dt).isoformat())
-    
+
+
 cli.add_command(save)
 cli.add_command(utctoest)
 cli.add_command(tstoest)
+cli.add_command(start_bot)
 
 if __name__ == '__main__':
     cli()
