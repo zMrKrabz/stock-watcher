@@ -179,6 +179,8 @@ class Commands(commands.Cog):
     async def monitor(self):
         await self.bot.wait_until_ready()
         ah = after_hours()
+        logger.debug(f"After hours: {ah}")
+
         if ah:
             return
 
