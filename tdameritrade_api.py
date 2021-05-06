@@ -4,10 +4,10 @@ import os
 import time
 import unittest
 import pandas as pd
-from logger import getLogger
+from custom_logger import get_logger
 
 
-logger = getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TdAmeritradeAPI(api.API):
@@ -21,7 +21,7 @@ class TdAmeritradeAPI(api.API):
         quote = self.client.quote(symbol)
 
         logger.info(quote)
-        
+
         return api.Price(t=quote[symbol]['quoteTimeInLong'], p=quote[symbol]['askPrice'])
     
     async def get_bars(self, symbol: str, timeframe: str, multiplier=1, limit=1000) -> pd.DataFrame:
