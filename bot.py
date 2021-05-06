@@ -210,7 +210,11 @@ class Commands(commands.Cog):
         for symbol in symbols:
             tickets = self.db.get_prices(symbol)
             m = Price(symbol, prices=tickets)
-            await m.monitor(self.api, send)
+
+            try:
+                await m.monitor(self.api, send)
+            except Exception:
+                logger.error(f"Failed to monitor price for {symbol}", exc_info=True)
             await asyncio.sleep(2)
 
         end = time.perf_counter()

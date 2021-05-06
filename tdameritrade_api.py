@@ -4,6 +4,10 @@ import os
 import time
 import unittest
 import pandas as pd
+from logger import getLogger
+
+
+logger = getLogger(__name__)
 
 
 class TdAmeritradeAPI(api.API):
@@ -16,6 +20,8 @@ class TdAmeritradeAPI(api.API):
     async def get_price(self, symbol: str, t=time.time()) -> api.Price:
         quote = self.client.quote(symbol)
 
+        logger.info(quote)
+        
         return api.Price(t=quote[symbol]['quoteTimeInLong'], p=quote[symbol]['askPrice'])
     
     async def get_bars(self, symbol: str, timeframe: str, multiplier=1, limit=1000) -> pd.DataFrame:
@@ -28,7 +34,6 @@ class TdAmeritradeAPI(api.API):
             frequency_type = 'minute'
             num = 1
             period_type = 'day'
-            # 13 hours in a trading day
 
         elif timeframe == 'hour':
             frequency_type = 'minute'
@@ -75,8 +80,11 @@ class Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_price(self):
         q = await self.client.get_price("AAPL")
-        print(q)
+        print({ "AAPL": q })
         
+    async def test_price(self):
+        q = await self.client.get_price("BX")
+        print({ "BX": q })
     # async def test_get_bars(self):
     #     bars = await self.client.get_bars("AAPL", timeframe="hour", multiplier=4, limit=1000)
 
